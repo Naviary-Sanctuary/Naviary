@@ -1,6 +1,5 @@
 /target
 output.ll
 output.o
-runtime.c
 program
 runtime.o
