@@ -1,6 +1,6 @@
 use crate::ast::*;
 use crate::lexer::{Lexer, Token};
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, bail};
 
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
@@ -349,7 +349,7 @@ mod tests {
 
         let lexer = Lexer::new(input);
         let mut parser = Parser::new(lexer);
-        let program = parser.parse_program().unwrap();
+        parser.parse_program().unwrap();
 
         // 10 + (20 * 3) 로 파싱되어야 함
         // AST 구조 확인 가능

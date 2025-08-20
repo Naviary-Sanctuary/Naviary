@@ -1,14 +1,11 @@
 use crate::ast::*;
 use anyhow::{Result, bail};
 use inkwell::IntPredicate;
-use inkwell::OptimizationLevel;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
-use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
-use inkwell::values::{
-    BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue,
-};
+use inkwell::types::{BasicMetadataTypeEnum, BasicTypeEnum};
+use inkwell::values::{BasicValueEnum, FunctionValue, PointerValue};
 use std::collections::HashMap;
 
 pub struct CodeGenerator<'ctx> {
@@ -57,13 +54,10 @@ impl<'ctx> CodeGenerator<'ctx> {
             Type::Int => self.context.i32_type().into(),
             Type::Float => self.context.f64_type().into(),
             Type::Bool => self.context.bool_type().into(),
-            Type::String => {
-                // 문자열은 i8* (포인터)로 표현
-                self.context
-                    .i8_type()
-                    .ptr_type(inkwell::AddressSpace::default())
-                    .into()
-            }
+            Type::String => self
+                .context
+                .ptr_type(inkwell::AddressSpace::default())
+                .into(),
         }
     }
 

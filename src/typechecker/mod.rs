@@ -1,5 +1,5 @@
 use crate::ast::*;
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use std::collections::HashMap;
 
 // 변수/함수의 타입 정보
