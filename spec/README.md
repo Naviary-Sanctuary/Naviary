@@ -162,6 +162,15 @@ let age: int = 30
 let mut score: float = 0.0
 ```
 
+### Default
+
+naviary has no default value assignment.
+
+```naviary
+let x:string; // Compile Error
+let mut x:string; // Compile error if you don't allocate it later.
+```
+
 ### Functions
 
 #### Basic Functions
@@ -371,19 +380,17 @@ x || y && z  // (x || (y && z))
 #### Basic Class
 
 ```naviary
-class Person {
-    // Fields
+class Person(
     name: string
     mut age: int        // Mutable field
     email: string?      // Optional field
-
-    // Constructor
+) {
+    // secondary constructor
     constructor(name: string, age: int, email: string?) {
         this.name = name
         this.age = age
         this.email = email
     }
-    constructor(this.name: string, this.age: int, this.email?: string)
 
     // Method, public by default
     fn greet() -> string {
@@ -409,11 +416,7 @@ let anonymous = Person::create("Anonymous")
 #### Inheritance
 
 ```naviary
-class Animal {
-    name: string
-
-    constructor(this.name: string)  // Concise constructor
-
+class Animal(name: string) {
     fn speak() -> string {
         "Some sound"
     }
@@ -423,9 +426,9 @@ class Animal {
     }
 }
 
-class Dog extends Animal {
-    breed: string
+class Dog(name:string, breed: string): Animal(name) {
 
+    // secondary constructor
     constructor(name: string, breed: string) {
         super(name)
         this.breed = breed
@@ -455,12 +458,7 @@ for animal in animals {
 #### Abstract Class
 
 ```naviary
-abstract class Shape {
-    x: int
-    y: int
-
-    constructor(this.x: int, this.y: int)
-
+abstract class Shape(x: int, y: int) {
     // Abstract methods
     abstract fn area() -> float
     abstract fn perimeter() -> float
@@ -476,14 +474,7 @@ abstract class Shape {
     }
 }
 
-class Circle extends Shape {
-    radius: float
-
-    constructor(x: int, y: int, radius: float) {
-        super(x, y)
-        this.radius = radius
-    }
-
+class Circle(x:int, y:int, radius: float): Shape(x,y) {
     override fn area() -> float {
         this.getPI() * this.radius * this.radius
     }
@@ -497,16 +488,7 @@ class Circle extends Shape {
     }
 }
 
-class Rectangle extends Shape {
-    width: float
-    height: float
-
-    constructor(x: int, y: int, width: float, height: float) {
-        super(x, y)
-        this.width = width
-        this.height = height
-    }
-
+class Rectangle(x: int, y: int, width: float, height: float): Shape(x,y) {
     override fn area() -> float {
         this.width * this.height
     }
@@ -530,21 +512,7 @@ interface Clickable {
 }
 
 // Interface implementation
-class Button implements Drawable, Clickable {
-    x: int
-    y: int
-    width: int
-    height: int
-    label: string
-
-    constructor(x: int, y: int, label: string) {
-        this.x = x
-        this.y = y
-        this.label = label
-        this.width = 100
-        this.height = 30
-    }
-
+class Button(x: int, y: int, label: string, width:int, height:int): Drawable, Clickable {
     fn draw() {
         // Access fields using this
         drawRect(this.x, this.y, this.width, this.height)
@@ -571,13 +539,7 @@ class Button implements Drawable, Clickable {
 #### Generic Class
 
 ```naviary
-class Container<T> {
-    mut items: T[] // Invariant by default
-
-    constructor() {
-        this.items = []
-    }
-
+class Container<T>(mut items: T[]) {
     fn add(item: T) {
         this.items.append(item)
     }
@@ -609,19 +571,13 @@ class Container<T> {
 #### Method Chaining
 
 ```naviary
-class StringBuilder {
-    mut buffer: string
-
-    constructor(initial: string = "") {
-        this.buffer = initial
-    }
-
-    fn append(text: string) -> StringBuilder {
+class StringBuilder(mut buffer: string) {
+    fn append(text: string) -> Self {
         this.buffer += text
         this  // Return this for chaining
     }
 
-    fn appendLine(text: string) -> StringBuilder {
+    fn appendLine(text: string) -> Self {
         this.buffer += text + "\n"
         this
     }
@@ -632,7 +588,7 @@ class StringBuilder {
 }
 
 // Usage
-let result = StringBuilder()
+let result = StringBuilder("")
     .append("Hello")
     .append(" ")
     .append("World")
