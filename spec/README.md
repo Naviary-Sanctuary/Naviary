@@ -171,6 +171,13 @@ let x:string; // Compile Error
 let mut x:string; // Compile error if you don't allocate it later.
 ```
 
+### Decorator
+
+```naviary
+@Service
+class UserService {}
+```
+
 ### Functions
 
 #### Basic Functions
