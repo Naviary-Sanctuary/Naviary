@@ -19,7 +19,7 @@
 
 ##### Tokens
 
-- Keywords: `let`, `fn`, `if`, `for`, `return`, `class`
+- Keywords: `let`, `func`, `if`, `for`, `return`, `class`
 - Types: `int`, `float`, `string`, `bool`
 - Operators: `+`, `-`, `*`, `/`, `==`, `!=`, `=`
 

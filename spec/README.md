@@ -184,22 +184,22 @@ class UserService {}
 
 ```
 // Function declaration
-fn addNumbers(a: int, b: int) -> int {
+func addNumbers(a: int, b: int) -> int {
     a + b  // Last expression is automatically returned
 }
 
 // Function with no return value
-fn printMessage(msg: string) {
+func printMessage(msg: string) {
     print(msg)
 }
 
 // Multiple return values
-fn divMod(a: int, b: int) -> (int, int) {
+func divMod(a: int, b: int) -> (int, int) {
     (a / b, a % b)
 }
 
 // Early return
-fn safeDivide(a: int, b: int) -> int? {
+func safeDivide(a: int, b: int) -> int? {
     if b == 0 {
         return nil
     }
@@ -229,7 +229,7 @@ numbers.map(x => x * 2)
 #### Parameter Specification
 
 ```
-fn createConnection(host: string, port: int, timeout: int) -> Connection {
+func createConnection(host: string, port: int, timeout: int) -> Connection {
     // ...
 }
 
@@ -250,7 +250,7 @@ let conn3 = createConnection(host, port, timeout: 30)  // Mixed
 #### Accepting Anonymous Objects
 
 ```naviary
-fn greet(x: { name: string }) -> string {
+func greet(x: { name: string }) -> string {
     "hello, {x.name}!"
 }
 ```
@@ -341,7 +341,7 @@ fn greet(x: { name: string }) -> string {
 ::  // Static access: Class::method()
 
 // Functional
-|>  // Pipeline: value |> fn
+|>  // Pipeline: value |> func
 =>  // Arrow function: x => x * 2
 
 // Channel
@@ -351,7 +351,7 @@ fn greet(x: { name: string }) -> string {
 _   // Wildcard: match x { _ => "default" }
 
 // Spread
-... // Variadic arguments, spread: fn(...args), [...arr]
+... // Variadic arguments, spread: func(...args), [...arr]
 ```
 
 #### Operator Precedence
@@ -400,16 +400,16 @@ class Person(
     }
 
     // Method, public by default
-    fn greet() -> string {
+    func greet() -> string {
         "Hello, I'm {this.name}"
     }
 
-    protected fn birthday() {
+    protected func birthday() {
         this.age += 1
     }
 
     // Static method
-    static fn create(name: string) -> Person {
+    static func create(name: string) -> Person {
         Person(name, 0, nil)
     }
 }
@@ -424,11 +424,11 @@ let anonymous = Person::create("Anonymous")
 
 ```naviary
 class Animal(name: string) {
-    fn speak() -> string {
+    func speak() -> string {
         "Some sound"
     }
 
-    fn move() {
+    func move() {
         print("{this.name} is moving")
     }
 }
@@ -442,11 +442,11 @@ class Dog(name:string, breed: string): Animal(name) {
     }
 
     // Method override
-    override fn speak() -> string {
+    override func speak() -> string {
         "Woof!"
     }
 
-    fn wagTail() {
+    func wagTail() {
         print("{this.name} is wagging tail")
     }
 }
@@ -467,40 +467,40 @@ for animal in animals {
 ```naviary
 abstract class Shape(x: int, y: int) {
     // Abstract methods
-    abstract fn area() -> float
-    abstract fn perimeter() -> float
+    abstract func area() -> float
+    abstract func perimeter() -> float
 
     // Regular method
-    fn move(dx: int, dy: int) {
+    func move(dx: int, dy: int) {
         this.x += dx
         this.y += dy
     }
 
-    fn getPosition() -> (int, int) {
+    func getPosition() -> (int, int) {
         (this.x, this.y)
     }
 }
 
 class Circle(x:int, y:int, radius: float): Shape(x,y) {
-    override fn area() -> float {
+    override func area() -> float {
         this.getPI() * this.radius * this.radius
     }
 
-    override fn perimeter() -> float {
+    override func perimeter() -> float {
         2 * this.getPI() * this.radius
     }
 
-    private fn getPI() -> float {
+    private func getPI() -> float {
         3.14159
     }
 }
 
 class Rectangle(x: int, y: int, width: float, height: float): Shape(x,y) {
-    override fn area() -> float {
+    override func area() -> float {
         this.width * this.height
     }
 
-    override fn perimeter() -> float {
+    override func perimeter() -> float {
         2 * (this.width + this.height)
     }
 }
@@ -510,33 +510,33 @@ class Rectangle(x: int, y: int, width: float, height: float): Shape(x,y) {
 
 ```naviary
 interface Drawable {
-    fn draw()
-    fn getBounds() -> Rectangle
+    func draw()
+    func getBounds() -> Rectangle
 }
 
 interface Clickable {
-    fn onClick(x: int, y: int)
+    func onClick(x: int, y: int)
 }
 
 // Interface implementation
 class Button(x: int, y: int, label: string, width:int, height:int): Drawable, Clickable {
-    fn draw() {
+    func draw() {
         // Access fields using this
         drawRect(this.x, this.y, this.width, this.height)
         drawText(this.label, this.x + 10, this.y + 15)
     }
 
-    fn getBounds() -> Rectangle {
+    func getBounds() -> Rectangle {
         Rectangle(this.x, this.y, this.width, this.height)
     }
 
-    fn onClick(x: int, y: int) {
+    func onClick(x: int, y: int) {
         if this.contains(x, y) {
             print("Button {this.label} clicked at ({x}, {y})")
         }
     }
 
-    fn contains(x: int, y: int) -> bool {
+    func contains(x: int, y: int) -> bool {
         x >= this.x && x <= this.x + this.width &&
         y >= this.y && y <= this.y + this.height
     }
@@ -547,11 +547,11 @@ class Button(x: int, y: int, label: string, width:int, height:int): Drawable, Cl
 
 ```naviary
 class Container<T>(mut items: T[]) {
-    fn add(item: T) {
+    func add(item: T) {
         this.items.append(item)
     }
 
-    fn get(index: int) -> T? {
+    func get(index: int) -> T? {
         if index < this.items.length() {
             this.items[index]
         } else {
@@ -559,7 +559,7 @@ class Container<T>(mut items: T[]) {
         }
     }
 
-    fn map<U>(transform: fn(T) -> U) -> Container<U> {
+    func map<U>(transform: func(T) -> U) -> Container<U> {
         let result = Container<U>()
         for item in this.items {
             result.add(transform(item))
@@ -567,7 +567,7 @@ class Container<T>(mut items: T[]) {
         result
     }
 
-    fn forEach(action: fn(T)) {
+    func forEach(action: func(T)) {
         for item in this.items {
             action(item)
         }
@@ -579,17 +579,17 @@ class Container<T>(mut items: T[]) {
 
 ```naviary
 class StringBuilder(mut buffer: string) {
-    fn append(text: string) -> StringBuilder {
+    func append(text: string) -> StringBuilder {
         this.buffer += text
         this  // Return this for chaining
     }
 
-    fn appendLine(text: string) -> StringBuilder {
+    func appendLine(text: string) -> StringBuilder {
         this.buffer += text + "\n"
         this
     }
 
-    fn toString() -> string {
+    func toString() -> string {
         this.buffer
     }
 }
@@ -756,7 +756,7 @@ enum Result<T, E> {
 }
 
 // Basic usage
-fn divide(a: int, b: int) -> Result<int, string> {
+func divide(a: int, b: int) -> Result<int, string> {
     if b == 0 {
         Err("Division by zero")
     } else {
@@ -784,7 +784,7 @@ if let Ok(value) = divide(10, 2) {
 - Propagates only for Result types, not allowed otherwise.
 
 ```naviary
-fn calculate() -> Result<int, string> {
+func calculate() -> Result<int, string> {
     let x = divide(10, 2)?  // Returns immediately if error
     let y = divide(x, 2)?
     Ok(y * 10)
@@ -801,7 +801,7 @@ let x = match divide(10, 2) {
 
 ```naviary
 // panic - terminates the program immediately
-fn assertPositive(x: int) {
+func assertPositive(x: int) {
     if x <= 0 {
         panic("Expected positive number, got {x}")
     }
@@ -812,7 +812,7 @@ fn assertPositive(x: int) {
 
 ```naviary
 // defer - executes at function exit (LIFO order)
-fn processFile(path: string) -> Result<Data, Error> {
+func processFile(path: string) -> Result<Data, Error> {
     let file = openFile(path)?
     defer file.close()  // Executes at function exit
 
@@ -824,7 +824,7 @@ fn processFile(path: string) -> Result<Data, Error> {
 }
 
 // Multiple defers - stack order (LIFO)
-fn example() {
+func example() {
     defer print("3")  // Third to execute
     defer print("2")  // Second to execute
     defer print("1")  // First to execute
@@ -833,7 +833,7 @@ fn example() {
 // Output: 0 1 2 3
 
 // defer if
-fn transaction() {
+func transaction() {
     let tx = db.begin()
     let mut success = false
 
@@ -929,11 +929,11 @@ readFile("data.txt")
     }
 
 // Custom pipeline-compatible functions
-fn transform(data: int[]) -> int[] {
+func transform(data: int[]) -> int[] {
     data.map(x => x * 2)
 }
 
-fn summarize(data: int[]) -> Summary {
+func summarize(data: int[]) -> Summary {
     Summary{
         total: data.sum(),
         average: data.sum() / data.length(),
@@ -995,12 +995,12 @@ let result = 5           // int
 
 ```naviary
 // Direct export
-export fn add(a: int, b: int) -> int { a + b }
+export func add(a: int, b: int) -> int { a + b }
 export class Vector { x: float, y: float }
 export const PI = 3.14159
 
 // Group export
-fn multiply(a: int, b: int) -> int { a * b }
+func multiply(a: int, b: int) -> int { a * b }
 export { multiply, divide }
 
 // Re-export (same syntax as import)
@@ -1044,7 +1044,7 @@ import {
 };
 
 // Usage
-fn main() {
+func main() {
     // Regular import
     let sum = math.add(1, 2);
 
