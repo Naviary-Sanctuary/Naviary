@@ -579,12 +579,12 @@ class Container<T>(mut items: T[]) {
 
 ```naviary
 class StringBuilder(mut buffer: string) {
-    fn append(text: string) -> Self {
+    fn append(text: string) -> StringBuilder {
         this.buffer += text
         this  // Return this for chaining
     }
 
-    fn appendLine(text: string) -> Self {
+    fn appendLine(text: string) -> StringBuilder {
         this.buffer += text + "\n"
         this
     }
