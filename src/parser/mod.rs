@@ -204,6 +204,28 @@ impl<'a> Parser<'a> {
         self.parse_equality()
     }
 
+    fn parse_equality(&mut self) -> Result<Expression> {
+        let mut left = self.parse_additive()?;
+
+        while let Some(token) = self.peek() {
+            let op = match token {
+                Token::EqualEqual => BinaryOp::Equal,
+                Token::NotEqual => BinaryOp::NotEqual,
+                _ => break,
+            };
+
+            self.advance();
+            let right = self.parse_additive()?;
+            left = Expression::Binary {
+                left: Box::new(left),
+                op,
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
+    }
+
     // 덧셈/뺄셈 (낮은 우선순위)
     fn parse_additive(&mut self) -> Result<Expression> {
         let mut left = self.parse_multiplicative()?;
@@ -217,28 +239,6 @@ impl<'a> Parser<'a> {
 
             self.advance();
             let right = self.parse_multiplicative()?;
-            left = Expression::Binary {
-                left: Box::new(left),
-                op,
-                right: Box::new(right),
-            };
-        }
-
-        Ok(left)
-    }
-
-    fn parse_equality(&mut self) -> Result<Expression> {
-        let mut left = self.parse_additive()?;
-
-        while let Some(token) = self.peek() {
-            let op = match token {
-                Token::EqualEqual => BinaryOp::Equal,
-                Token::NotEqual => BinaryOp::NotEqual,
-                _ => break,
-            };
-
-            self.advance();
-            let right = self.parse_additive()?;
             left = Expression::Binary {
                 left: Box::new(left),
                 op,
