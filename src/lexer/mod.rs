@@ -54,10 +54,10 @@ pub enum Token {
     Star,
     #[token("/")]
     Slash,
-    #[token("=")]
-    Equal,
     #[token("==")]
     EqualEqual,
+    #[token("=")]
+    Equal,
     #[token("!=")]
     NotEqual,
 

@@ -46,6 +46,16 @@ impl<'ctx> CodeGenerator<'ctx> {
             .fn_type(&[BasicMetadataTypeEnum::from(i32_type)], false);
         let print_fn = self.module.add_function("print", print_type, None);
         self.functions.insert("print".to_string(), print_fn);
+
+        // printBool 함수 선언 (외부 C 함수로)
+        let bool_type = self.context.bool_type();
+        let print_bool_type = self
+            .context
+            .void_type()
+            .fn_type(&[BasicMetadataTypeEnum::from(bool_type)], false);
+        let print_bool_fn = self.module.add_function("printBool", print_bool_type, None);
+        self.functions
+            .insert("printBool".to_string(), print_bool_fn);
     }
 
     // AST 타입을 LLVM 타입으로 변환

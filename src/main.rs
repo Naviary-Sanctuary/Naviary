@@ -24,7 +24,8 @@ fn main() {
             let a = 10;
             let b = 20;
             let result = add(a, b);
-            print(result);
+            let result2 = result + 10;
+            printBool(result2 != a + b + 10);
         }
     "#;
 
@@ -32,17 +33,18 @@ fn main() {
     println!("{}", "Input:".green());
     println!("{}", input);
 
-    // Lexing
-    println!("\n{}", "Step 1: Lexing...".yellow());
+    // generate Lexer
+    println!("\n{}", "Step 1: Generating Lexer...".yellow());
     let lexer = Lexer::new(input);
 
-    // Parsing
+    // Parsing with Lexer
     println!("{}", "Step 2: Parsing...".yellow());
     let mut parser = Parser::new(lexer);
-    let program = match parser.parse_program() {
-        Ok(prog) => {
+    let program_ast = match parser.parse_program() {
+        Ok(program) => {
             println!("{}", "✓ Parsing successful".green());
-            prog
+            println!("{:#?}", program);
+            program
         }
         Err(e) => {
             println!("{} {}", "✗ Parsing failed:".red(), e);
@@ -53,7 +55,7 @@ fn main() {
     // Type Checking
     println!("{}", "Step 3: Type Checking...".yellow());
     let mut type_checker = TypeChecker::new();
-    match type_checker.check_program(&program) {
+    match type_checker.check_program(&program_ast) {
         Ok(_) => {
             println!("{}", "✓ Type check passed".green());
         }
@@ -68,7 +70,7 @@ fn main() {
     let context = Context::create();
     let mut codegen = CodeGenerator::new(&context, "naviary_module");
 
-    match codegen.compile_program(&program) {
+    match codegen.compile_program(&program_ast) {
         Ok(_) => {
             println!("{}", "✓ Code generation successful".green());
         }
@@ -79,9 +81,8 @@ fn main() {
     }
 
     // LLVM IR 출력
-    let ir = codegen.get_ir_string();
+    let _ir = codegen.get_ir_string();
     println!("\n{}", "=== Generated LLVM IR ===".cyan());
-    println!("{}", ir);
 
     // IR을 파일로 저장
     if let Err(e) = codegen.write_to_file("output.ll") {

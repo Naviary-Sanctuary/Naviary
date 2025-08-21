@@ -7,3 +7,8 @@ void print(int value) {
     // 디버깅 정보 추가
     fprintf(stderr, "[DEBUG] printed value: %d\n", value);
 }
+
+void printBool(int value) {
+    printf("🚀 Naviary says: %s\n", value ? "true" : "false");
+    fprintf(stderr, "[DEBUG] printed value: %s\n", value ? "true" : "false");
+}

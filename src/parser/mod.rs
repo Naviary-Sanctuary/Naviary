@@ -201,7 +201,7 @@ impl<'a> Parser<'a> {
 
     // 표현식 파싱 (우선순위 처리)
     fn parse_expression(&mut self) -> Result<Expression> {
-        self.parse_additive()
+        self.parse_equality()
     }
 
     // 덧셈/뺄셈 (낮은 우선순위)
@@ -217,6 +217,28 @@ impl<'a> Parser<'a> {
 
             self.advance();
             let right = self.parse_multiplicative()?;
+            left = Expression::Binary {
+                left: Box::new(left),
+                op,
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
+    }
+
+    fn parse_equality(&mut self) -> Result<Expression> {
+        let mut left = self.parse_additive()?;
+
+        while let Some(token) = self.peek() {
+            let op = match token {
+                Token::EqualEqual => BinaryOp::Equal,
+                Token::NotEqual => BinaryOp::NotEqual,
+                _ => break,
+            };
+
+            self.advance();
+            let right = self.parse_additive()?;
             left = Expression::Binary {
                 left: Box::new(left),
                 op,
