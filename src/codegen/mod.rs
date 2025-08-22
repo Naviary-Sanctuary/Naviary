@@ -251,16 +251,22 @@ impl<'ctx> CodeGenerator<'ctx> {
                 then_block,
                 else_block,
             } => {
+                // 1. 조건식 계산 (x > 5) -> true/false 값 생성
                 let condition_value = self.compile_expression(condition)?;
 
+                // 현재 함수 가져오기
                 let function = self.current_function.unwrap();
 
                 // 블록 생성
+                // then_bb: if가 true일 때 실행할 블록
+                // else_bb: if가 false일 때 실행할 블록
+                // merge_bb: 둘다 끝나고 만나는 합류점
                 let then_bb = self.context.append_basic_block(function, "then");
                 let else_bb = self.context.append_basic_block(function, "else");
                 let merge_bb = self.context.append_basic_block(function, "merge");
 
                 // 조건 분기
+                // condition_value가 true면 then_bb로 이동, 아니면 else_bb로 이동하지만 else_bb가 없으면 merge_bb로 이동해라
                 self.builder.build_conditional_branch(
                     condition_value.into_int_value(),
                     then_bb,
@@ -271,9 +277,10 @@ impl<'ctx> CodeGenerator<'ctx> {
                     },
                 )?;
 
-                // then 블록 컴파일
+                // then 블록 컴파일, if가 false면 어차피 실행되지 않는다.
                 self.builder.position_at_end(then_bb);
                 self.compile_block(then_block)?;
+                // then 블록에서 명시적 return이 없으면 merge_bb로 이동해라
                 if self.current_block_has_no_terminator() {
                     self.builder.build_unconditional_branch(merge_bb)?;
                 }
