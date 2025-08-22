@@ -1,0 +1,9 @@
+func main() {
+    let mut count = 0;
+    count = count + 1;
+
+    if count > 0 {
+        printString("count is over 0");
+        print(count);
+    }
+}

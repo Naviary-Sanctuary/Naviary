@@ -9,42 +9,36 @@ use colored::*;
 use inkwell::context::Context;
 use lexer::Lexer;
 use parser::Parser;
-use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::{env, fs};
 use typechecker::TypeChecker;
 
 fn main() {
-    let input = r#"
-        func add(x: int, y: int) -> int {
-            return x + y;
-        }
-        
-        func main() {
-            let mut a = 10;
-            a = a + 10;
-            print(a);
+    let args = env::args().collect::<Vec<String>>();
+    let filename = &args[1];
 
-            a = 10;
-            let b = 20;
-            let result = add(a, b);
-            if result > 10 {
-                printString("result is greater than 10");
-                print(result);
-            } else {
-                printString("result is less than or equal to 10");
-                print(result);
-            }
+    // .navi 확장자 체크
+    if !filename.ends_with(".navi") {
+        eprintln!("Warning: Expected .navi file extension");
+    }
+
+    let (input, source_name) = match fs::read_to_string(filename) {
+        Ok(content) => (content, filename.clone()),
+        Err(e) => {
+            eprintln!("Error reading file '{}': {}", filename, e);
+            return;
         }
-    "#;
+    };
 
     println!("{}", "=== Naviary Compiler v0.0.1 ===".blue().bold());
     println!("{}", "Input:".green());
+    println!("{}", source_name);
     println!("{}", input);
 
     // generate Lexer
     println!("\n{}", "Step 1: Generating Lexer...".yellow());
-    let lexer = Lexer::new(input);
+    let lexer = Lexer::new(input.as_str());
 
     // Parsing with Lexer
     println!("{}", "Step 2: Parsing...".yellow());
