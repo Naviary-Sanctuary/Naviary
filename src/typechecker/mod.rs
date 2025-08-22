@@ -218,6 +218,23 @@ impl TypeChecker {
                 // void 함수 호출도 허용
                 let _ = self.check_expression_statement(expr);
             }
+
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+            } => {
+                let condition_type = self.infer_expression_type(condition)?;
+                if condition_type != Type::Bool {
+                    bail!("If condition must be bool, found {:?}", condition_type)
+                }
+
+                self.check_block(then_block)?;
+
+                if let Some(else_block) = else_block {
+                    self.check_block(else_block)?;
+                }
+            }
         }
 
         Ok(())
@@ -321,6 +338,29 @@ impl TypeChecker {
                             );
                         }
                         Ok(Type::Bool)
+                    }
+
+                    BinaryOp::LessThan
+                    | BinaryOp::GreaterThan
+                    | BinaryOp::LessThanEqual
+                    | BinaryOp::GreaterThanEqual => {
+                        if left_type != right_type {
+                            bail!(
+                                "Cannot compare different types: {:?} and {:?}",
+                                left_type,
+                                right_type
+                            );
+                        }
+
+                        match left_type {
+                            Type::Int | Type::Float => Ok(Type::Bool),
+                            _ => bail!(
+                                "Invalid types for comparison operation: {:?} {:?} {:?}",
+                                left_type,
+                                op,
+                                right_type
+                            ),
+                        }
                     }
                 }
             }

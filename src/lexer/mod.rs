@@ -54,12 +54,22 @@ pub enum Token {
     Star,
     #[token("/")]
     Slash,
-    #[token("==")]
-    EqualEqual,
     #[token("=")]
     Equal,
+
+    // 비교 연산자
+    #[token("==")]
+    EqualEqual,
     #[token("!=")]
     NotEqual,
+    #[token("<")]
+    LessThan,
+    #[token(">")]
+    GreaterThan,
+    #[token("<=")]
+    LessThanEqual,
+    #[token(">=")]
+    GreaterThanEqual,
 
     // 구분자
     #[token("(")]

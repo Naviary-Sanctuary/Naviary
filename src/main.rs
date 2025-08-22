@@ -24,8 +24,13 @@ fn main() {
             let a = 10;
             let b = 20;
             let result = add(a, b);
-            let result2 = result + 10;
-            printBool(result2 != a + b + 10);
+            if result > 10 {
+                printString("result is greater than 10");
+                print(result);
+            } else {
+                printString("result is less than or equal to 10");
+                print(result);
+            }
         }
     "#;
 

@@ -153,6 +153,7 @@ impl<'a> Parser<'a> {
         match &self.current_token {
             Some(Token::Let) => self.parse_let_statement(),
             Some(Token::Return) => self.parse_return_statement(),
+            Some(Token::If) => self.parse_if_statement(),
             _ => {
                 // 표현식 문장 (함수 호출 등)
                 let expr = self.parse_expression()?;
@@ -199,18 +200,55 @@ impl<'a> Parser<'a> {
         Ok(Statement::Return(value))
     }
 
-    // 표현식 파싱 (우선순위 처리)
-    fn parse_expression(&mut self) -> Result<Expression> {
-        self.parse_equality()
+    fn parse_if_statement(&mut self) -> Result<Statement> {
+        self.expect(Token::If)?;
+        let condition = self.parse_expression()?;
+        self.expect(Token::LeftBrace)?;
+        let then_block = self.parse_block()?;
+        self.expect(Token::RightBrace)?;
+
+        let else_block = if self.peek() == Some(&Token::Else) {
+            self.advance();
+
+            if self.peek() == Some(&Token::If) {
+                // else if 케이스 - 재귀적으로 if문 파싱
+                Some(Block {
+                    statements: vec![self.parse_if_statement()?],
+                })
+            } else {
+                // 일반 else 케이스
+                self.expect(Token::LeftBrace)?;
+                let block = self.parse_block()?;
+                self.expect(Token::RightBrace)?;
+                Some(block)
+            }
+        } else {
+            None
+        };
+
+        Ok(Statement::If {
+            condition,
+            then_block,
+            else_block,
+        })
     }
 
-    fn parse_equality(&mut self) -> Result<Expression> {
+    // 표현식 파싱 (우선순위 처리)
+    fn parse_expression(&mut self) -> Result<Expression> {
+        self.parse_comparison()
+    }
+
+    fn parse_comparison(&mut self) -> Result<Expression> {
         let mut left = self.parse_additive()?;
 
         while let Some(token) = self.peek() {
             let op = match token {
                 Token::EqualEqual => BinaryOp::Equal,
                 Token::NotEqual => BinaryOp::NotEqual,
+                Token::LessThan => BinaryOp::LessThan,
+                Token::GreaterThan => BinaryOp::GreaterThan,
+                Token::LessThanEqual => BinaryOp::LessThanEqual,
+                Token::GreaterThanEqual => BinaryOp::GreaterThanEqual,
                 _ => break,
             };
 

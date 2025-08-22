@@ -12,3 +12,8 @@ void printBool(int value) {
     printf("🚀 Naviary says: %s\n", value ? "true" : "false");
     fprintf(stderr, "[DEBUG] printed value: %s\n", value ? "true" : "false");
 }
+
+void printString(char* value) {
+    printf("🚀 Naviary says: %s\n", value);
+    fprintf(stderr, "[DEBUG] printed value: %s\n", value);
+}

@@ -42,6 +42,12 @@ pub enum Statement {
     Expression(Expression),
     // return x;
     Return(Option<Expression>),
+
+    If {
+        condition: Expression,
+        then_block: Block,
+        else_block: Option<Block>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,10 +76,14 @@ pub enum Expression {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOp {
-    Add,      // +
-    Subtract, // -
-    Multiply, // *
-    Divide,   // /
-    Equal,    // ==
-    NotEqual, // !=
+    Add,              // +
+    Subtract,         // -
+    Multiply,         // *
+    Divide,           // /
+    Equal,            // ==
+    NotEqual,         // !=
+    LessThan,         // <
+    GreaterThan,      // >
+    LessThanEqual,    // <=
+    GreaterThanEqual, // >=
 }

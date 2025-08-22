@@ -56,6 +56,18 @@ impl<'ctx> CodeGenerator<'ctx> {
         let print_bool_fn = self.module.add_function("printBool", print_bool_type, None);
         self.functions
             .insert("printBool".to_string(), print_bool_fn);
+
+        // printString 함수 선언 (외부 C 함수로)
+        let string_type = self.context.ptr_type(inkwell::AddressSpace::default());
+        let print_string_type = self
+            .context
+            .void_type()
+            .fn_type(&[BasicMetadataTypeEnum::from(string_type)], false);
+        let print_string_fn = self
+            .module
+            .add_function("printString", print_string_type, None);
+        self.functions
+            .insert("printString".to_string(), print_string_fn);
     }
 
     // AST 타입을 LLVM 타입으로 변환
@@ -233,6 +245,53 @@ impl<'ctx> CodeGenerator<'ctx> {
                 // 표현식 실행 (결과 무시)
                 self.compile_expression(expr)?;
             }
+
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+            } => {
+                let condition_value = self.compile_expression(condition)?;
+
+                let function = self.current_function.unwrap();
+
+                // 블록 생성
+                let then_bb = self.context.append_basic_block(function, "then");
+                let else_bb = self.context.append_basic_block(function, "else");
+                let merge_bb = self.context.append_basic_block(function, "merge");
+
+                // 조건 분기
+                self.builder.build_conditional_branch(
+                    condition_value.into_int_value(),
+                    then_bb,
+                    if else_block.is_some() {
+                        else_bb
+                    } else {
+                        merge_bb
+                    },
+                )?;
+
+                // then 블록 컴파일
+                self.builder.position_at_end(then_bb);
+                self.compile_block(then_block)?;
+                if self.current_block_has_no_terminator() {
+                    self.builder.build_unconditional_branch(merge_bb)?;
+                }
+
+                // else 블록 컴파일
+                if let Some(else_block) = else_block {
+                    self.builder.position_at_end(else_bb);
+                    self.compile_block(else_block)?;
+                    if self.current_block_has_no_terminator() {
+                        self.builder.build_unconditional_branch(merge_bb)?;
+                    }
+                } else {
+                    self.builder.position_at_end(else_bb);
+                    self.builder.build_unconditional_branch(merge_bb)?;
+                }
+
+                self.builder.position_at_end(merge_bb);
+            }
         }
 
         Ok(())
@@ -384,6 +443,82 @@ impl<'ctx> CodeGenerator<'ctx> {
                                 lhs.into_float_value(),
                                 rhs.into_float_value(),
                                 "fne",
+                            )?
+                        };
+                        Ok(result.into())
+                    }
+
+                    BinaryOp::LessThan => {
+                        let result = if lhs.is_int_value() {
+                            self.builder.build_int_compare(
+                                IntPredicate::SLT,
+                                lhs.into_int_value(),
+                                rhs.into_int_value(),
+                                "lt",
+                            )?
+                        } else {
+                            self.builder.build_float_compare(
+                                inkwell::FloatPredicate::OLT,
+                                lhs.into_float_value(),
+                                rhs.into_float_value(),
+                                "olt",
+                            )?
+                        };
+                        Ok(result.into())
+                    }
+
+                    BinaryOp::GreaterThan => {
+                        let result = if lhs.is_int_value() {
+                            self.builder.build_int_compare(
+                                IntPredicate::SGT,
+                                lhs.into_int_value(),
+                                rhs.into_int_value(),
+                                "gt",
+                            )?
+                        } else {
+                            self.builder.build_float_compare(
+                                inkwell::FloatPredicate::OGT,
+                                lhs.into_float_value(),
+                                rhs.into_float_value(),
+                                "ogt",
+                            )?
+                        };
+                        Ok(result.into())
+                    }
+
+                    BinaryOp::LessThanEqual => {
+                        let result = if lhs.is_int_value() {
+                            self.builder.build_int_compare(
+                                IntPredicate::SLE,
+                                lhs.into_int_value(),
+                                rhs.into_int_value(),
+                                "le",
+                            )?
+                        } else {
+                            self.builder.build_float_compare(
+                                inkwell::FloatPredicate::OLE,
+                                lhs.into_float_value(),
+                                rhs.into_float_value(),
+                                "ole",
+                            )?
+                        };
+                        Ok(result.into())
+                    }
+
+                    BinaryOp::GreaterThanEqual => {
+                        let result = if lhs.is_int_value() {
+                            self.builder.build_int_compare(
+                                IntPredicate::SGE,
+                                lhs.into_int_value(),
+                                rhs.into_int_value(),
+                                "ge",
+                            )?
+                        } else {
+                            self.builder.build_float_compare(
+                                inkwell::FloatPredicate::OGE,
+                                lhs.into_float_value(),
+                                rhs.into_float_value(),
+                                "oge",
                             )?
                         };
                         Ok(result.into())
