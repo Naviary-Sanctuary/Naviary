@@ -88,11 +88,6 @@ fn main() {
             return;
         }
     }
-
-    // LLVM IR 출력
-    let _ir = codegen.get_ir_string();
-    println!("\n{}", "=== Generated LLVM IR ===".cyan());
-
     // IR을 파일로 저장
     if let Err(e) = codegen.write_to_file("output.ll") {
         println!("{} {}", "✗ Failed to write LLVM IR:".red(), e);

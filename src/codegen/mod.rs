@@ -583,9 +583,4 @@ impl<'ctx> CodeGenerator<'ctx> {
             .print_to_file(filename)
             .map_err(|e| anyhow::anyhow!("Failed to write LLVM IR: {}", e.to_string()))
     }
-
-    // LLVM IR을 문자열로 반환
-    pub fn get_ir_string(&self) -> String {
-        self.module.print_to_string().to_string()
-    }
 }
