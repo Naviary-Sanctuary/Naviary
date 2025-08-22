@@ -13,6 +13,8 @@ pub enum Token {
     Else,
     #[token("return")]
     Return,
+    #[token("mut")]
+    Mut,
 
     // 타입
     #[token("int")]

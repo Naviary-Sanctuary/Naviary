@@ -13,7 +13,7 @@ pub struct CodeGenerator<'ctx> {
     module: Module<'ctx>,
     builder: Builder<'ctx>,
     // 변수 심볼 테이블 (변수명 -> LLVM 값)
-    variables: HashMap<String, PointerValue<'ctx>>,
+    variables: HashMap<String, (PointerValue<'ctx>, Type, bool)>,
     // 함수 심볼 테이블
     functions: HashMap<String, FunctionValue<'ctx>>,
     // 현재 함수
@@ -160,7 +160,8 @@ impl<'ctx> CodeGenerator<'ctx> {
             // 매개변수를 위한 alloca (스택 할당)
             let alloca = self.create_entry_block_alloca(&param.name, &param.ty);
             self.builder.build_store(alloca, arg)?;
-            self.variables.insert(param.name.clone(), alloca);
+            self.variables
+                .insert(param.name.clone(), (alloca, param.ty.clone(), false));
         }
 
         // 함수 본문 컴파일
@@ -219,7 +220,12 @@ impl<'ctx> CodeGenerator<'ctx> {
     // 문장 컴파일
     fn compile_statement(&mut self, stmt: &Statement) -> Result<()> {
         match stmt {
-            Statement::Let { name, ty, value } => {
+            Statement::Let {
+                name,
+                ty,
+                value,
+                mutable,
+            } => {
                 // 값 계산
                 let val = self.compile_expression(value)?;
 
@@ -229,7 +235,18 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                 // 값 저장
                 self.builder.build_store(alloca, val)?;
-                self.variables.insert(name.clone(), alloca);
+                self.variables
+                    .insert(name.clone(), (alloca, var_type.clone(), *mutable));
+            }
+
+            Statement::Assignment { name, value } => {
+                let ptr = match self.variables.get(name) {
+                    Some(&(ptr, _, _)) => ptr,
+                    None => bail!("Undefined variable: {}", name),
+                };
+
+                let new_value = self.compile_expression(value)?;
+                self.builder.build_store(ptr, new_value)?;
             }
 
             Statement::Return(expr) => {
@@ -329,17 +346,15 @@ impl<'ctx> CodeGenerator<'ctx> {
             }
 
             Expression::Identifier(name) => {
-                // 변수 값 로드
-                let ptr = self
-                    .variables
-                    .get(name)
-                    .ok_or_else(|| anyhow::anyhow!("Undefined variable: {}", name))?;
-                let val = self
-                    .builder
-                    .build_load(self.context.i32_type(), *ptr, name)?;
+                let (ptr, ty) = match self.variables.get(name) {
+                    Some(&(ptr, ty, _)) => (ptr, ty), // 둘 다 Copy!
+                    None => bail!("Undefined variable: {}", name),
+                };
+
+                let llvm_type = self.get_llvm_type(&ty);
+                let val = self.builder.build_load(llvm_type, ptr, name)?;
                 Ok(val)
             }
-
             Expression::Binary { left, op, right } => {
                 let lhs = self.compile_expression(left)?;
                 let rhs = self.compile_expression(right)?;

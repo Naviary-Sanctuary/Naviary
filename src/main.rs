@@ -21,7 +21,11 @@ fn main() {
         }
         
         func main() {
-            let a = 10;
+            let mut a = 10;
+            a = a + 10;
+            print(a);
+
+            a = 10;
             let b = 20;
             let result = add(a, b);
             if result > 10 {

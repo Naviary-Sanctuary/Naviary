@@ -3,7 +3,7 @@ pub struct Program {
     pub functions: Vec<Function>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Type {
     Int,
     Float,
@@ -37,7 +37,15 @@ pub enum Statement {
         name: String,
         ty: Option<Type>, // 타입 명시 옵션
         value: Expression,
+        mutable: bool,
     },
+
+    // 변수 할당: x = 10
+    Assignment {
+        name: String,
+        value: Box<Expression>,
+    },
+
     // 표현식 구문 (함수 호출 등)
     Expression(Expression),
     // return x;

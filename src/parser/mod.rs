@@ -5,25 +5,34 @@ use anyhow::{Result, bail};
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
     current_token: Option<Token>,
+    peek_token: Option<Token>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(mut lexer: Lexer<'a>) -> Self {
         let current_token = lexer.next_token();
+        let peek_token = lexer.next_token();
         Parser {
             lexer,
             current_token,
+            peek_token,
         }
     }
 
     // 다음 토큰으로 이동
     fn advance(&mut self) {
-        self.current_token = self.lexer.next_token();
+        self.current_token = self.peek_token.clone();
+        self.peek_token = self.lexer.next_token();
     }
 
     // 현재 토큰 확인 (소비하지 않음)
     fn peek(&self) -> Option<&Token> {
         self.current_token.as_ref()
+    }
+
+    // 다음 토큰을 미리 확인
+    fn peek_ahead(&self) -> Option<&Token> {
+        self.peek_token.as_ref()
     }
 
     // 특정 토큰을 기대하고 소비
@@ -154,6 +163,18 @@ impl<'a> Parser<'a> {
             Some(Token::Let) => self.parse_let_statement(),
             Some(Token::Return) => self.parse_return_statement(),
             Some(Token::If) => self.parse_if_statement(),
+            Some(Token::Identifier(name)) if self.peek_ahead() == Some(&Token::Equal) => {
+                // x = 10; 형태의 assignment
+                let name = name.clone();
+                self.advance(); // identifier 소비
+                self.advance(); // '=' 소비
+                let value = self.parse_expression()?;
+                self.expect(Token::Semicolon)?;
+                Ok(Statement::Assignment {
+                    name,
+                    value: Box::new(value),
+                })
+            }
             _ => {
                 // 표현식 문장 (함수 호출 등)
                 let expr = self.parse_expression()?;
@@ -167,6 +188,13 @@ impl<'a> Parser<'a> {
     // let name: type = value;
     fn parse_let_statement(&mut self) -> Result<Statement> {
         self.advance(); // 'let' 소비
+
+        let mutable = if self.peek() == Some(&Token::Mut) {
+            self.advance(); // 'mut'이 있다면 소비
+            true
+        } else {
+            false
+        };
 
         let name = self.expect_identifier()?;
 
@@ -182,7 +210,12 @@ impl<'a> Parser<'a> {
         let value = self.parse_expression()?;
         self.expect(Token::Semicolon)?;
 
-        Ok(Statement::Let { name, ty, value })
+        Ok(Statement::Let {
+            name,
+            ty,
+            value,
+            mutable,
+        })
     }
 
     // return expr;

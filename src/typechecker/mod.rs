@@ -7,6 +7,7 @@ use std::collections::HashMap;
 pub struct TypeInfo {
     pub ty: Type,
     pub is_function: bool,
+    pub is_mutable: bool,
     pub param_types: Vec<Type>,    // 함수인 경우 매개변수 타입들
     pub return_type: Option<Type>, // 함수인 경우 반환 타입 (None = void)
 }
@@ -43,6 +44,7 @@ impl TypeChecker {
             TypeInfo {
                 ty: Type::Int, // 이 필드는 사실 함수에서는 안 쓰임
                 is_function: true,
+                is_mutable: false,
                 param_types: vec![Type::Int], // 일단 int만 지원
                 return_type: None,            // void (아무것도 반환하지 않음)
             },
@@ -60,7 +62,7 @@ impl TypeChecker {
     }
 
     // 변수 등록
-    fn declare_variable(&mut self, name: String, ty: Type) -> Result<()> {
+    fn declare_variable(&mut self, name: String, ty: Type, is_mutable: bool) -> Result<()> {
         let current_scope = self
             .scopes
             .last_mut()
@@ -75,6 +77,7 @@ impl TypeChecker {
             TypeInfo {
                 ty,
                 is_function: false,
+                is_mutable,
                 param_types: vec![],
                 return_type: None,
             },
@@ -129,6 +132,7 @@ impl TypeChecker {
             is_function: true,
             param_types,
             return_type: func.return_type.clone(), // None이면 void
+            is_mutable: false,
         };
 
         if self.functions.contains_key(&func.name) {
@@ -148,7 +152,7 @@ impl TypeChecker {
 
         // 매개변수를 스코프에 추가
         for param in &func.params {
-            self.declare_variable(param.name.clone(), param.ty.clone())?;
+            self.declare_variable(param.name.clone(), param.ty.clone(), false)?;
         }
 
         // 함수 본문 검사
@@ -172,7 +176,12 @@ impl TypeChecker {
 
     fn check_statement(&mut self, stmt: &Statement) -> Result<()> {
         match stmt {
-            Statement::Let { name, ty, value } => {
+            Statement::Let {
+                name,
+                ty,
+                value,
+                mutable,
+            } => {
                 // 값의 타입 추론
                 let value_type = self.infer_expression_type(value)?;
 
@@ -193,7 +202,24 @@ impl TypeChecker {
                 };
 
                 // 변수 등록
-                self.declare_variable(name.clone(), var_type)?;
+                self.declare_variable(name.clone(), var_type, *mutable)?;
+            }
+
+            Statement::Assignment { name, value } => {
+                let info = self.lookup(name)?;
+
+                if !info.is_mutable {
+                    bail!("Cannot assign to immutable variable '{}'", name);
+                }
+
+                let value_type = self.infer_expression_type(value)?;
+                if value_type != info.ty {
+                    bail!(
+                        "Type mismatch in assignment: expected {:?}, found {:?}",
+                        info.ty,
+                        value_type
+                    );
+                }
             }
 
             Statement::Return(expr) => {
