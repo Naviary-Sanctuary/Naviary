@@ -2,14 +2,25 @@ use crate::ast::*;
 use anyhow::{Result, bail};
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum FunctionKind {
+    Regular {
+        param_types: Vec<Type>,
+        return_type: Option<Type>,
+    },
+    Builtin(BuiltinFunction),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BuiltinFunction {
+    Print, // 나중에 더 추가 가능
+}
 // 변수/함수의 타입 정보
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeInfo {
     pub ty: Type,
-    pub is_function: bool,
     pub is_mutable: bool,
-    pub param_types: Vec<Type>,    // 함수인 경우 매개변수 타입들
-    pub return_type: Option<Type>, // 함수인 경우 반환 타입 (None = void)
+    pub function_kind: Option<FunctionKind>,
 }
 
 // 타입 검사기
@@ -42,11 +53,9 @@ impl TypeChecker {
         self.functions.insert(
             "print".to_string(),
             TypeInfo {
-                ty: Type::Int, // 이 필드는 사실 함수에서는 안 쓰임
-                is_function: true,
+                ty: Type::Int, // 무시됨
                 is_mutable: false,
-                param_types: vec![Type::Int], // 일단 int만 지원
-                return_type: None,            // void (아무것도 반환하지 않음)
+                function_kind: Some(FunctionKind::Builtin(BuiltinFunction::Print)),
             },
         );
     }
@@ -76,10 +85,8 @@ impl TypeChecker {
             name,
             TypeInfo {
                 ty,
-                is_function: false,
                 is_mutable,
-                param_types: vec![],
-                return_type: None,
+                function_kind: None,
             },
         );
 
@@ -129,10 +136,11 @@ impl TypeChecker {
 
         let info = TypeInfo {
             ty: func.return_type.clone().unwrap_or(Type::Int), // 이 필드는 함수에서 안 쓰임
-            is_function: true,
-            param_types,
-            return_type: func.return_type.clone(), // None이면 void
             is_mutable: false,
+            function_kind: Some(FunctionKind::Regular {
+                param_types,
+                return_type: func.return_type.clone(),
+            }),
         };
 
         if self.functions.contains_key(&func.name) {
@@ -208,6 +216,10 @@ impl TypeChecker {
             Statement::Assignment { name, value } => {
                 let info = self.lookup(name)?;
 
+                if info.function_kind.is_some() {
+                    bail!("Cannot assign to function '{}'", name);
+                }
+
                 if !info.is_mutable {
                     bail!("Cannot assign to immutable variable '{}'", name);
                 }
@@ -266,7 +278,7 @@ impl TypeChecker {
                 variable,
                 start,
                 end,
-                inclusive,
+                inclusive: _,
                 body,
             } => {
                 let start_type = self.infer_expression_type(start)?;
@@ -306,41 +318,56 @@ impl TypeChecker {
     fn check_expression_statement(&self, expr: &Expression) -> Result<()> {
         match expr {
             Expression::Call { name, args } => {
-                // 함수 호출은 void든 아니든 statement로 사용 가능
                 let info = self.lookup(name)?;
 
-                if !info.is_function {
-                    bail!("'{}' is not a function", name);
-                }
+                match &info.function_kind {
+                    Some(FunctionKind::Builtin(BuiltinFunction::Print)) => {
+                        // 최소 1개 이상
+                        if args.is_empty() {
+                            bail!("print() expects at least 1 argument");
+                        }
 
-                // 인자 개수 확인
-                if args.len() != info.param_types.len() {
-                    bail!(
-                        "Function '{}' expects {} arguments, but {} provided",
-                        name,
-                        info.param_types.len(),
-                        args.len()
-                    );
-                }
-
-                // 각 인자의 타입 확인
-                for (i, (arg, expected_type)) in args.iter().zip(&info.param_types).enumerate() {
-                    let arg_type = self.infer_expression_type(arg)?;
-                    if arg_type != *expected_type {
-                        bail!(
-                            "Type mismatch in argument {} of function '{}': expected {:?}, found {:?}",
-                            i + 1,
-                            name,
-                            expected_type,
-                            arg_type
-                        );
+                        // 모든 인자가 출력 가능한 타입인지 확인
+                        for arg in args {
+                            let arg_type = self.infer_expression_type(arg)?;
+                            match arg_type {
+                                Type::Int | Type::Float | Type::String | Type::Bool => {}
+                                _ => bail!("Cannot print type {:?}", arg_type),
+                            }
+                        }
+                        Ok(())
                     }
-                }
+                    Some(FunctionKind::Regular {
+                        param_types,
+                        return_type: _,
+                    }) => {
+                        if args.len() != param_types.len() {
+                            bail!(
+                                "Function '{}' expects {} arguments, but {} provided",
+                                name,
+                                param_types.len(),
+                                args.len()
+                            );
+                        }
 
-                Ok(())
+                        for (i, (arg, expected_type)) in args.iter().zip(param_types).enumerate() {
+                            let arg_type = self.infer_expression_type(arg)?;
+                            if arg_type != *expected_type {
+                                bail!(
+                                    "Type mismatch in argument {} of function '{}': expected {:?}, found {:?}",
+                                    i + 1,
+                                    name,
+                                    expected_type,
+                                    arg_type
+                                );
+                            }
+                        }
+                        Ok(())
+                    }
+                    None => bail!("'{}' is not a function", name),
+                }
             }
             _ => {
-                // 다른 표현식도 statement로 사용 가능 (결과는 무시)
                 self.infer_expression_type(expr)?;
                 Ok(())
             }
@@ -356,7 +383,7 @@ impl TypeChecker {
 
             Expression::Identifier(name) => {
                 let info = self.lookup(name)?;
-                if info.is_function {
+                if info.function_kind.is_some() {
                     bail!("Cannot use function '{}' as a value", name);
                 }
                 Ok(info.ty)
@@ -430,38 +457,42 @@ impl TypeChecker {
             Expression::Call { name, args } => {
                 let info = self.lookup(name)?;
 
-                if !info.is_function {
-                    bail!("'{}' is not a function", name);
-                }
-
-                // 인자 개수 확인
-                if args.len() != info.param_types.len() {
-                    bail!(
-                        "Function '{}' expects {} arguments, but {} provided",
-                        name,
-                        info.param_types.len(),
-                        args.len()
-                    );
-                }
-
-                // 각 인자의 타입 확인
-                for (i, (arg, expected_type)) in args.iter().zip(&info.param_types).enumerate() {
-                    let arg_type = self.infer_expression_type(arg)?;
-                    if arg_type != *expected_type {
-                        bail!(
-                            "Type mismatch in argument {} of function '{}': expected {:?}, found {:?}",
-                            i + 1,
-                            name,
-                            expected_type,
-                            arg_type
-                        );
+                match &info.function_kind {
+                    Some(FunctionKind::Builtin(BuiltinFunction::Print)) => {
+                        bail!("Void function 'print' cannot be used as a value");
                     }
-                }
+                    Some(FunctionKind::Regular {
+                        param_types,
+                        return_type,
+                    }) => {
+                        if args.len() != param_types.len() {
+                            bail!(
+                                "Function '{}' expects {} arguments, but {} provided",
+                                name,
+                                param_types.len(),
+                                args.len()
+                            );
+                        }
 
-                // 반환 타입 처리
-                info.return_type.ok_or_else(|| {
-                    anyhow::anyhow!("Void function '{}' cannot be used as a value", name)
-                })
+                        for (i, (arg, expected_type)) in args.iter().zip(param_types).enumerate() {
+                            let arg_type = self.infer_expression_type(arg)?;
+                            if arg_type != *expected_type {
+                                bail!(
+                                    "Type mismatch in argument {} of function '{}': expected {:?}, found {:?}",
+                                    i + 1,
+                                    name,
+                                    expected_type,
+                                    arg_type
+                                );
+                            }
+                        }
+
+                        return_type.clone().ok_or_else(|| {
+                            anyhow::anyhow!("Void function '{}' cannot be used as a value", name)
+                        })
+                    }
+                    None => bail!("'{}' is not a function", name),
+                }
             }
         }
     }

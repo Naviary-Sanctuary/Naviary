@@ -97,34 +97,6 @@ fn main() {
 }
 
 fn compile_and_run() -> Result<(), String> {
-    // runtime.c 파일이 없으면 생성
-    if !Path::new("runtime.c").exists() {
-        println!("{}", "Creating runtime.c...".yellow());
-        fs::write(
-            "runtime.c",
-            r#"#include <stdio.h>
-
-void print(int value) {
-    printf("%d\n", value);
-}"#,
-        )
-        .map_err(|e| format!("Failed to create runtime.c: {}", e))?;
-    }
-
-    // runtime.c 컴파일
-    println!("Compiling runtime.c...");
-    let output = Command::new("clang")
-        .args(&["-c", "runtime.c", "-o", "runtime.o"])
-        .output()
-        .map_err(|e| format!("Failed to execute clang: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "Failed to compile runtime.c:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
     // LLVM IR을 오브젝트 파일로 컴파일
     println!("Compiling LLVM IR...");
     let output = Command::new("clang")

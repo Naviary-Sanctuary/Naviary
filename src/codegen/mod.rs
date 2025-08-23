@@ -37,37 +37,19 @@ impl<'ctx> CodeGenerator<'ctx> {
 
     // 내장 함수 선언
     fn declare_builtin_functions(&mut self) {
-        // print 함수 선언 (외부 C 함수로)
-        // void print(int value)
         let i32_type = self.context.i32_type();
-        let print_type = self
+        let i8_ptr_type = self
             .context
-            .void_type()
-            .fn_type(&[BasicMetadataTypeEnum::from(i32_type)], false);
-        let print_fn = self.module.add_function("print", print_type, None);
-        self.functions.insert("print".to_string(), print_fn);
+            .i8_type()
+            .ptr_type(inkwell::AddressSpace::default());
 
-        // printBool 함수 선언 (외부 C 함수로)
-        let bool_type = self.context.bool_type();
-        let print_bool_type = self
-            .context
-            .void_type()
-            .fn_type(&[BasicMetadataTypeEnum::from(bool_type)], false);
-        let print_bool_fn = self.module.add_function("printBool", print_bool_type, None);
-        self.functions
-            .insert("printBool".to_string(), print_bool_fn);
+        let printf_type = i32_type.fn_type(
+            &[i8_ptr_type.into()],
+            true, // variadic (가변 인자)
+        );
 
-        // printString 함수 선언 (외부 C 함수로)
-        let string_type = self.context.ptr_type(inkwell::AddressSpace::default());
-        let print_string_type = self
-            .context
-            .void_type()
-            .fn_type(&[BasicMetadataTypeEnum::from(string_type)], false);
-        let print_string_fn = self
-            .module
-            .add_function("printString", print_string_type, None);
-        self.functions
-            .insert("printString".to_string(), print_string_fn);
+        let printf_fn = self.module.add_function("printf", printf_type, None);
+        self.functions.insert("printf".to_string(), printf_fn);
     }
 
     // AST 타입을 LLVM 타입으로 변환
@@ -630,28 +612,116 @@ impl<'ctx> CodeGenerator<'ctx> {
             }
 
             Expression::Call { name, args } => {
-                // 함수 핸들을 복사하여 `self`의 불변 대여를 즉시 종료
-                let function = *self
-                    .functions
-                    .get(name)
-                    .ok_or_else(|| anyhow::anyhow!("Undefined function: {}", name))?;
+                // print 특별 처리
+                if name == "print" {
+                    let printf_fn = *self
+                        .functions
+                        .get("printf")
+                        .ok_or_else(|| anyhow::anyhow!("printf not found"))?;
 
-                // 인자 컴파일
-                let mut arg_values = Vec::new();
-                for arg in args {
-                    arg_values.push(self.compile_expression(arg)?.into());
-                }
+                    if args.is_empty() {
+                        bail!("print() expects at least 1 argument");
+                    }
 
-                // 함수 호출
-                let call_site = self.builder.build_call(function, &arg_values, name)?;
+                    // 모든 인자를 순서대로 출력
+                    for (i, arg) in args.iter().enumerate() {
+                        let arg_type = self.infer_expression_type(arg)?;
 
-                // 반환값이 있으면 반환, 없으면 임의 값 반환
-                // inkwell의 Either 타입 사용
-                match call_site.try_as_basic_value() {
-                    inkwell::Either::Left(val) => Ok(val),
-                    inkwell::Either::Right(_) => {
-                        // void 함수 - 임의 값 반환 (사용되지 않을 것)
-                        Ok(self.context.i32_type().const_int(0, false).into())
+                        // 마지막 인자만 줄바꿈, 나머지는 공백
+                        let is_last = i == args.len() - 1;
+
+                        match arg_type {
+                            Type::Int => {
+                                let fmt = if is_last {
+                                    self.builder.build_global_string_ptr("%d\n", "int_fmt_nl")?
+                                } else {
+                                    self.builder.build_global_string_ptr("%d ", "int_fmt_sp")?
+                                };
+                                let val = self.compile_expression(arg)?;
+                                self.builder.build_call(
+                                    printf_fn,
+                                    &[fmt.as_pointer_value().into(), val.into()],
+                                    "print_int",
+                                )?;
+                            }
+                            Type::String => {
+                                let fmt = if is_last {
+                                    self.builder.build_global_string_ptr("%s\n", "str_fmt_nl")?
+                                } else {
+                                    self.builder.build_global_string_ptr("%s", "str_fmt")? // 공백 없음
+                                };
+                                let val = self.compile_expression(arg)?;
+                                self.builder.build_call(
+                                    printf_fn,
+                                    &[fmt.as_pointer_value().into(), val.into()],
+                                    "print_string",
+                                )?;
+                            }
+                            Type::Bool => {
+                                let val = self.compile_expression(arg)?;
+                                let true_str = if is_last {
+                                    self.builder.build_global_string_ptr("true\n", "true_nl")?
+                                } else {
+                                    self.builder.build_global_string_ptr("true ", "true_sp")?
+                                };
+                                let false_str = if is_last {
+                                    self.builder
+                                        .build_global_string_ptr("false\n", "false_nl")?
+                                } else {
+                                    self.builder.build_global_string_ptr("false ", "false_sp")?
+                                };
+
+                                let str_ptr = self.builder.build_select(
+                                    val.into_int_value(),
+                                    true_str.as_pointer_value(),
+                                    false_str.as_pointer_value(),
+                                    "bool_str",
+                                )?;
+
+                                self.builder.build_call(
+                                    printf_fn,
+                                    &[str_ptr.into()],
+                                    "print_bool",
+                                )?;
+                            }
+                            Type::Float => {
+                                let fmt = if is_last {
+                                    self.builder
+                                        .build_global_string_ptr("%f\n", "float_fmt_nl")?
+                                } else {
+                                    self.builder
+                                        .build_global_string_ptr("%f ", "float_fmt_sp")?
+                                };
+                                let val = self.compile_expression(arg)?;
+                                self.builder.build_call(
+                                    printf_fn,
+                                    &[fmt.as_pointer_value().into(), val.into()],
+                                    "print_float",
+                                )?;
+                            }
+                        }
+                    }
+
+                    Ok(self.context.i32_type().const_int(0, false).into())
+                } else {
+                    // 일반 함수 호출 (기존 코드)
+                    let function = *self
+                        .functions
+                        .get(name)
+                        .ok_or_else(|| anyhow::anyhow!("Undefined function: {}", name))?;
+
+                    let mut arg_values = Vec::new();
+                    for arg in args {
+                        arg_values.push(self.compile_expression(arg)?.into());
+                    }
+
+                    let call_site = self.builder.build_call(function, &arg_values, name)?;
+
+                    match call_site.try_as_basic_value() {
+                        inkwell::Either::Left(val) => Ok(val),
+                        inkwell::Either::Right(_) => {
+                            Ok(self.context.i32_type().const_int(0, false).into())
+                        }
                     }
                 }
             }
@@ -663,5 +733,35 @@ impl<'ctx> CodeGenerator<'ctx> {
         self.module
             .print_to_file(filename)
             .map_err(|e| anyhow::anyhow!("Failed to write LLVM IR: {}", e.to_string()))
+    }
+
+    fn infer_expression_type(&self, expr: &Expression) -> Result<Type> {
+        match expr {
+            Expression::Number(_) => Ok(Type::Int),
+            Expression::Float(_) => Ok(Type::Float),
+            Expression::String(_) => Ok(Type::String),
+            Expression::Bool(_) => Ok(Type::Bool),
+            Expression::Identifier(name) => {
+                let (_, ty, _) = self
+                    .variables
+                    .get(name)
+                    .ok_or_else(|| anyhow::anyhow!("Unknown variable: {}", name))?;
+                Ok(*ty)
+            }
+            Expression::Binary { left, op, .. } => {
+                match op {
+                    BinaryOp::Equal
+                    | BinaryOp::NotEqual
+                    | BinaryOp::LessThan
+                    | BinaryOp::GreaterThan
+                    | BinaryOp::LessThanEqual
+                    | BinaryOp::GreaterThanEqual => Ok(Type::Bool),
+                    _ => self.infer_expression_type(left), // 산술 연산은 왼쪽 타입 반환
+                }
+            }
+            Expression::Call { .. } => {
+                bail!("Cannot infer type of function call in codegen");
+            }
+        }
     }
 }
