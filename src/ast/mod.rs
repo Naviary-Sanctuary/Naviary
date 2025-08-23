@@ -56,6 +56,14 @@ pub enum Statement {
         then_block: Block,
         else_block: Option<Block>,
     },
+
+    For {
+        variable: String,
+        start: Expression,
+        end: Expression,
+        inclusive: bool,
+        body: Block,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

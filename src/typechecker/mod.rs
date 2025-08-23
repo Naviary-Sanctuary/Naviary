@@ -261,6 +261,42 @@ impl TypeChecker {
                     self.check_block(else_block)?;
                 }
             }
+
+            Statement::For {
+                variable,
+                start,
+                end,
+                inclusive,
+                body,
+            } => {
+                let start_type = self.infer_expression_type(start)?;
+                let end_type = self.infer_expression_type(end)?;
+
+                if start_type != end_type {
+                    bail!(
+                        "Start and end of for loop must have the same type, found {:?} and {:?}",
+                        start_type,
+                        end_type
+                    );
+                }
+
+                match start_type {
+                    Type::Int => {
+                        // 새 스코프 시작 (for 블록)
+                        self.push_scope();
+                        // loop 변수를 immutable int로 등록
+                        self.declare_variable(variable.clone(), Type::Int, false)?;
+                        // body 체크
+                        self.check_block(body)?;
+                        // 스코프 종료
+                        self.pop_scope();
+                    }
+                    _ => bail!(
+                        "For loop range must be numeric type, found {:?}",
+                        start_type
+                    ),
+                }
+            }
         }
 
         Ok(())

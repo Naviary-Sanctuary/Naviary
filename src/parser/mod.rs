@@ -163,6 +163,7 @@ impl<'a> Parser<'a> {
             Some(Token::Let) => self.parse_let_statement(),
             Some(Token::Return) => self.parse_return_statement(),
             Some(Token::If) => self.parse_if_statement(),
+            Some(Token::For) => self.parse_for_statement(),
             Some(Token::Identifier(name)) if self.peek_ahead() == Some(&Token::Equal) => {
                 // x = 10; 형태의 assignment
                 let name = name.clone();
@@ -263,6 +264,40 @@ impl<'a> Parser<'a> {
             condition,
             then_block,
             else_block,
+        })
+    }
+
+    fn parse_for_statement(&mut self) -> Result<Statement> {
+        self.expect(Token::For)?;
+
+        let variable = self.expect_identifier()?;
+        self.expect(Token::In)?;
+        let start = self.parse_expression()?;
+
+        let inclusive = match self.current_token {
+            Some(Token::Range) => {
+                self.advance();
+                false
+            }
+            Some(Token::RangeEqual) => {
+                self.advance();
+                true
+            }
+            _ => bail!("Expected '..' or '..=' in for loop range"),
+        };
+
+        let end = self.parse_expression()?;
+
+        self.expect(Token::LeftBrace)?;
+        let body = self.parse_block()?;
+        self.expect(Token::RightBrace)?;
+
+        Ok(Statement::For {
+            variable,
+            start,
+            end,
+            inclusive,
+            body,
         })
     }
 

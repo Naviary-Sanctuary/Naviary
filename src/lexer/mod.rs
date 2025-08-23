@@ -15,6 +15,10 @@ pub enum Token {
     Return,
     #[token("mut")]
     Mut,
+    #[token("for")]
+    For,
+    #[token("in")]
+    In,
 
     // 타입
     #[token("int")]
@@ -72,6 +76,12 @@ pub enum Token {
     LessThanEqual,
     #[token(">=")]
     GreaterThanEqual,
+
+    // 범위 연산자
+    #[token("..")] // 0..10 (exclusive)
+    Range,
+    #[token("..=")] // 0..=10 (inclusive)
+    RangeEqual,
 
     // 구분자
     #[token("(")]

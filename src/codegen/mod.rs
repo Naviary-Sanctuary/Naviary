@@ -316,6 +316,87 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                 self.builder.position_at_end(merge_bb);
             }
+            Statement::For {
+                variable,
+                start,
+                end,
+                inclusive,
+                body,
+            } => {
+                // 1. start와 end 값 계산
+                let start_val = self.compile_expression(start)?;
+                let end_val = self.compile_expression(end)?;
+
+                let function = self.current_function.unwrap();
+
+                // 2. 필요한 블록들 생성
+                let loop_header = self.context.append_basic_block(function, "loop_header");
+                let loop_body = self.context.append_basic_block(function, "loop_body");
+                let loop_exit = self.context.append_basic_block(function, "loop_exit");
+
+                // 3. loop 변수를 위한 alloca (함수 entry에)
+                let loop_var = self.create_entry_block_alloca(variable, &Type::Int);
+
+                // 4. 초기값 저장
+                self.builder.build_store(loop_var, start_val)?;
+
+                // 5. loop_header로 점프
+                self.builder.build_unconditional_branch(loop_header)?;
+
+                // 6. loop_header: 조건 체크
+                self.builder.position_at_end(loop_header);
+                let current_val =
+                    self.builder
+                        .build_load(self.context.i32_type(), loop_var, variable)?;
+
+                // 비교 (inclusive에 따라 < 또는 <=)
+                let op = if *inclusive {
+                    IntPredicate::SLE
+                } else {
+                    IntPredicate::SLT
+                };
+
+                let condition = self.builder.build_int_compare(
+                    op,
+                    current_val.into_int_value(),
+                    end_val.into_int_value(),
+                    "loop_cond",
+                )?;
+
+                self.builder
+                    .build_conditional_branch(condition, loop_body, loop_exit)?;
+
+                // 7. loop_body: 본문 실행
+                self.builder.position_at_end(loop_body);
+
+                // loop 변수를 스코프에 추가 (immutable)
+                let old_vars = self.variables.clone(); // 기존 변수 백업
+                self.variables
+                    .insert(variable.clone(), (loop_var, Type::Int, false));
+
+                // body 컴파일
+                self.compile_block(body)?;
+
+                // i++ (증가)
+                let current = self
+                    .builder
+                    .build_load(self.context.i32_type(), loop_var, "i")?;
+                let next = self.builder.build_int_add(
+                    current.into_int_value(),
+                    self.context.i32_type().const_int(1, false),
+                    "next_i",
+                )?;
+                self.builder.build_store(loop_var, next)?;
+
+                // loop_header로 다시
+                self.builder.build_unconditional_branch(loop_header)?;
+
+                // 8. loop_exit: 루프 종료 후
+                self.builder.position_at_end(loop_exit);
+
+                // 변수 스코프 복원
+                self.variables = old_vars;
+            }
         }
 
         Ok(())
