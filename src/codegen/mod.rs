@@ -610,118 +610,113 @@ impl<'ctx> CodeGenerator<'ctx> {
                     }
                 }
             }
+            Expression::Call { name, args } if name == "print" => {
+                let printf_fn = *self
+                    .functions
+                    .get("printf")
+                    .ok_or_else(|| anyhow::anyhow!("printf not found"))?;
+
+                if args.is_empty() {
+                    bail!("print() expects at least 1 argument");
+                }
+
+                // 모든 인자를 순서대로 출력
+                for (i, arg) in args.iter().enumerate() {
+                    let arg_type = self.infer_expression_type(arg)?;
+
+                    // 마지막 인자만 줄바꿈, 나머지는 공백
+                    let is_last = i == args.len() - 1;
+
+                    match arg_type {
+                        Type::Int => {
+                            let fmt = if is_last {
+                                self.builder.build_global_string_ptr("%d\n", "int_fmt_nl")?
+                            } else {
+                                self.builder.build_global_string_ptr("%d ", "int_fmt_sp")?
+                            };
+                            let val = self.compile_expression(arg)?;
+                            self.builder.build_call(
+                                printf_fn,
+                                &[fmt.as_pointer_value().into(), val.into()],
+                                "print_int",
+                            )?;
+                        }
+                        Type::String => {
+                            let fmt = if is_last {
+                                self.builder.build_global_string_ptr("%s\n", "str_fmt_nl")?
+                            } else {
+                                self.builder.build_global_string_ptr("%s", "str_fmt")? // 공백 없음
+                            };
+                            let val = self.compile_expression(arg)?;
+                            self.builder.build_call(
+                                printf_fn,
+                                &[fmt.as_pointer_value().into(), val.into()],
+                                "print_string",
+                            )?;
+                        }
+                        Type::Bool => {
+                            let val = self.compile_expression(arg)?;
+                            let true_str = if is_last {
+                                self.builder.build_global_string_ptr("true\n", "true_nl")?
+                            } else {
+                                self.builder.build_global_string_ptr("true ", "true_sp")?
+                            };
+                            let false_str = if is_last {
+                                self.builder
+                                    .build_global_string_ptr("false\n", "false_nl")?
+                            } else {
+                                self.builder.build_global_string_ptr("false ", "false_sp")?
+                            };
+
+                            let str_ptr = self.builder.build_select(
+                                val.into_int_value(),
+                                true_str.as_pointer_value(),
+                                false_str.as_pointer_value(),
+                                "bool_str",
+                            )?;
+
+                            self.builder
+                                .build_call(printf_fn, &[str_ptr.into()], "print_bool")?;
+                        }
+                        Type::Float => {
+                            let fmt = if is_last {
+                                self.builder
+                                    .build_global_string_ptr("%f\n", "float_fmt_nl")?
+                            } else {
+                                self.builder
+                                    .build_global_string_ptr("%f ", "float_fmt_sp")?
+                            };
+                            let val = self.compile_expression(arg)?;
+                            self.builder.build_call(
+                                printf_fn,
+                                &[fmt.as_pointer_value().into(), val.into()],
+                                "print_float",
+                            )?;
+                        }
+                    }
+                }
+
+                Ok(self.context.i32_type().const_int(0, false).into())
+            }
 
             Expression::Call { name, args } => {
-                // print 특별 처리
-                if name == "print" {
-                    let printf_fn = *self
-                        .functions
-                        .get("printf")
-                        .ok_or_else(|| anyhow::anyhow!("printf not found"))?;
+                // 일반 함수 호출 (기존 코드)
+                let function = *self
+                    .functions
+                    .get(name)
+                    .ok_or_else(|| anyhow::anyhow!("Undefined function: {}", name))?;
 
-                    if args.is_empty() {
-                        bail!("print() expects at least 1 argument");
-                    }
+                let mut arg_values = Vec::new();
+                for arg in args {
+                    arg_values.push(self.compile_expression(arg)?.into());
+                }
 
-                    // 모든 인자를 순서대로 출력
-                    for (i, arg) in args.iter().enumerate() {
-                        let arg_type = self.infer_expression_type(arg)?;
+                let call_site = self.builder.build_call(function, &arg_values, name)?;
 
-                        // 마지막 인자만 줄바꿈, 나머지는 공백
-                        let is_last = i == args.len() - 1;
-
-                        match arg_type {
-                            Type::Int => {
-                                let fmt = if is_last {
-                                    self.builder.build_global_string_ptr("%d\n", "int_fmt_nl")?
-                                } else {
-                                    self.builder.build_global_string_ptr("%d ", "int_fmt_sp")?
-                                };
-                                let val = self.compile_expression(arg)?;
-                                self.builder.build_call(
-                                    printf_fn,
-                                    &[fmt.as_pointer_value().into(), val.into()],
-                                    "print_int",
-                                )?;
-                            }
-                            Type::String => {
-                                let fmt = if is_last {
-                                    self.builder.build_global_string_ptr("%s\n", "str_fmt_nl")?
-                                } else {
-                                    self.builder.build_global_string_ptr("%s", "str_fmt")? // 공백 없음
-                                };
-                                let val = self.compile_expression(arg)?;
-                                self.builder.build_call(
-                                    printf_fn,
-                                    &[fmt.as_pointer_value().into(), val.into()],
-                                    "print_string",
-                                )?;
-                            }
-                            Type::Bool => {
-                                let val = self.compile_expression(arg)?;
-                                let true_str = if is_last {
-                                    self.builder.build_global_string_ptr("true\n", "true_nl")?
-                                } else {
-                                    self.builder.build_global_string_ptr("true ", "true_sp")?
-                                };
-                                let false_str = if is_last {
-                                    self.builder
-                                        .build_global_string_ptr("false\n", "false_nl")?
-                                } else {
-                                    self.builder.build_global_string_ptr("false ", "false_sp")?
-                                };
-
-                                let str_ptr = self.builder.build_select(
-                                    val.into_int_value(),
-                                    true_str.as_pointer_value(),
-                                    false_str.as_pointer_value(),
-                                    "bool_str",
-                                )?;
-
-                                self.builder.build_call(
-                                    printf_fn,
-                                    &[str_ptr.into()],
-                                    "print_bool",
-                                )?;
-                            }
-                            Type::Float => {
-                                let fmt = if is_last {
-                                    self.builder
-                                        .build_global_string_ptr("%f\n", "float_fmt_nl")?
-                                } else {
-                                    self.builder
-                                        .build_global_string_ptr("%f ", "float_fmt_sp")?
-                                };
-                                let val = self.compile_expression(arg)?;
-                                self.builder.build_call(
-                                    printf_fn,
-                                    &[fmt.as_pointer_value().into(), val.into()],
-                                    "print_float",
-                                )?;
-                            }
-                        }
-                    }
-
-                    Ok(self.context.i32_type().const_int(0, false).into())
-                } else {
-                    // 일반 함수 호출 (기존 코드)
-                    let function = *self
-                        .functions
-                        .get(name)
-                        .ok_or_else(|| anyhow::anyhow!("Undefined function: {}", name))?;
-
-                    let mut arg_values = Vec::new();
-                    for arg in args {
-                        arg_values.push(self.compile_expression(arg)?.into());
-                    }
-
-                    let call_site = self.builder.build_call(function, &arg_values, name)?;
-
-                    match call_site.try_as_basic_value() {
-                        inkwell::Either::Left(val) => Ok(val),
-                        inkwell::Either::Right(_) => {
-                            Ok(self.context.i32_type().const_int(0, false).into())
-                        }
+                match call_site.try_as_basic_value() {
+                    inkwell::Either::Left(val) => Ok(val),
+                    inkwell::Either::Right(_) => {
+                        Ok(self.context.i32_type().const_int(0, false).into())
                     }
                 }
             }
