@@ -1,5 +1,5 @@
-/target
-output.ll
-output.o
-program
-runtime.o
+**/target
+**/output.ll
+**/output.o
+**/program
+**/runtime.o
