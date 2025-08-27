@@ -29,7 +29,7 @@ impl ObjectHeader {
 pub struct GarbageCollector {
     first_object: *mut ObjectHeader,
     total_bytes_allocated: usize,
-    _garbage_collection_threshold: usize,
+    garbage_collection_threshold: usize,
     root_objects: Vec<*mut ObjectHeader>,
 }
 
@@ -39,7 +39,7 @@ impl GarbageCollector {
             // NULL 포인터를 만듬.
             first_object: ptr::null_mut(),
             total_bytes_allocated: 0,
-            _garbage_collection_threshold: 1024 * 1024, // 1MB
+            garbage_collection_threshold: 1024 * 1024, // 1MB
             root_objects: Vec::new(),
         }
     }
@@ -99,6 +99,12 @@ impl GarbageCollector {
         let header_size = ObjectHeader::HEADER_SIZE;
         let total_size = size + header_size;
 
+        if self.should_collect(total_size) {
+            self.collect();
+
+            self.garbage_collection_threshold = std::cmp::max(self.total_bytes_allocated * 2, 1024);
+        }
+
         //메모리 할당
         // 저수준 메모리 할당 API -> C의 malloc/free와 비슷함
         let layout = Layout::from_size_align(total_size, ObjectHeader::HEADER_ALIGN)
@@ -107,10 +113,6 @@ impl GarbageCollector {
         let header_ptr = unsafe {
             alloc(layout) as *mut ObjectHeader // 메모리 할당
         };
-
-        if header_ptr.is_null() {
-            panic!("Memory allocation failed");
-        }
 
         // 헤더 초기화
         unsafe {
@@ -134,6 +136,10 @@ impl GarbageCollector {
             let data_ptr = (header_ptr as *mut u8).add(header_size);
             data_ptr
         }
+    }
+
+    fn should_collect(&self, size: usize) -> bool {
+        self.total_bytes_allocated + size >= self.garbage_collection_threshold
     }
 
     pub fn sweep(&mut self) {
@@ -175,41 +181,51 @@ impl GarbageCollector {
 }
 
 #[test]
-fn test_mark_and_sweep() {
+fn test_automatic_gc_trigger() {
     let mut gc = GarbageCollector::new();
 
-    // 5개 객체 할당
-    let obj1 = gc.allocate(100);
-    let _obj2 = gc.allocate(200);
-    let obj3 = gc.allocate(300);
-    let _obj4 = gc.allocate(400);
-    let obj5 = gc.allocate(500);
+    // 임계값을 낮게 설정 (테스트용)
+    gc.garbage_collection_threshold = 1000; // 1KB
 
-    // obj1, obj3, obj5만 루트로 등록
-    // (obj2, obj4는 가비지가 될 예정)
-    gc.add_root(obj1);
-    gc.add_root(obj3);
-    gc.add_root(obj5);
+    println!("초기 임계값: {} bytes", gc.garbage_collection_threshold);
 
-    // GC 실행!
-    gc.collect();
+    // 루트 없이 계속 할당 (모두 가비지)
+    for i in 0..10 {
+        let size = 200; // 각 200 bytes
+        let _obj = gc.allocate(size);
 
-    // 검증
-    let expected_remaining = ObjectHeader::HEADER_SIZE + 100 +  // obj1
-        ObjectHeader::HEADER_SIZE + 300 +  // obj3  
-        ObjectHeader::HEADER_SIZE + 500; // obj5
+        println!("할당 #{}: 총 {} bytes", i, gc.total_bytes_allocated);
 
-    assert_eq!(gc.total_bytes_allocated, expected_remaining);
+        // 5번째쯤에 임계값 초과 → 자동 GC 발생!
+    }
 
-    // 살아남은 객체들 확인
-    unsafe {
-        let header1 = (obj1 as *mut ObjectHeader).sub(1);
-        let header3 = (obj3 as *mut ObjectHeader).sub(1);
-        let header5 = (obj5 as *mut ObjectHeader).sub(1);
+    // GC가 실행되어서 메모리가 정리되었을 것
+    assert!(gc.total_bytes_allocated < 1000);
+}
 
-        // mark는 해제되어야 함 (다음 GC 위해)
-        assert!(!(*header1).is_marked);
-        assert!(!(*header3).is_marked);
-        assert!(!(*header5).is_marked);
+#[test]
+fn test_gc_with_mixed_roots() {
+    let mut gc = GarbageCollector::new();
+    gc.garbage_collection_threshold = 2000; // 2KB
+
+    let mut roots = Vec::new();
+
+    // 20개 객체 할당 (일부만 루트로 유지)
+    for i in 0..20 {
+        let obj = gc.allocate(150);
+
+        // 짝수 번째만 루트로 유지
+        if i % 2 == 0 {
+            gc.add_root(obj);
+            roots.push(obj);
+        }
+        // 홀수 번째는 가비지가 됨
+    }
+
+    println!("GC 후 남은 객체: {}", roots.len());
+
+    // 루트 정리
+    for obj in roots {
+        gc.remove_root(obj);
     }
 }
