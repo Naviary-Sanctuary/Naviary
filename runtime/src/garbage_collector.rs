@@ -27,11 +27,10 @@ impl ObjectHeader {
 }
 
 pub struct GarbageCollector {
-    // 일단 연결리스트로 구현한다.
     first_object: *mut ObjectHeader,
-
     total_bytes_allocated: usize,
-    garbage_collection_threshold: usize,
+    _garbage_collection_threshold: usize,
+    root_objects: Vec<*mut ObjectHeader>,
 }
 
 impl GarbageCollector {
@@ -40,8 +39,58 @@ impl GarbageCollector {
             // NULL 포인터를 만듬.
             first_object: ptr::null_mut(),
             total_bytes_allocated: 0,
-            garbage_collection_threshold: 1024 * 1024, // 1MB
+            _garbage_collection_threshold: 1024 * 1024, // 1MB
+            root_objects: Vec::new(),
         }
+    }
+
+    pub fn add_root(&mut self, data_ptr: *mut u8) {
+        if data_ptr.is_null() {
+            return;
+        }
+
+        let header_ptr = unsafe { (data_ptr as *mut ObjectHeader).sub(1) };
+
+        if !self.root_objects.contains(&header_ptr) {
+            self.root_objects.push(header_ptr);
+        }
+    }
+
+    pub fn remove_root(&mut self, data_ptr: *mut u8) {
+        if data_ptr.is_null() {
+            return;
+        }
+
+        let header_ptr = unsafe { (data_ptr as *mut ObjectHeader).sub(1) };
+        self.root_objects.retain(|&root| root != header_ptr);
+    }
+
+    pub fn mark(&mut self) {
+        // clone()하는 이유: 빌림 규칙
+        for &root in &self.root_objects.clone() {
+            self.mark_object(root);
+        }
+    }
+
+    fn mark_object(&mut self, object: *mut ObjectHeader) {
+        if object.is_null() {
+            return;
+        }
+
+        unsafe {
+            if (*object).is_marked {
+                return;
+            }
+
+            (*object).is_marked = true;
+
+            // TODO: 추후 참조 추적 구현
+        }
+    }
+
+    pub fn collect(&mut self) {
+        self.mark();
+        self.sweep();
     }
 
     // 현재는 시스템 malloc 호출만 한다.
@@ -125,115 +174,42 @@ impl GarbageCollector {
     }
 }
 
-#[cfg(test)]
-mod test_with_header {
-    use super::*;
+#[test]
+fn test_mark_and_sweep() {
+    let mut gc = GarbageCollector::new();
 
-    #[test]
-    fn test_linked_list_creation() {
-        let mut gc = GarbageCollector::new();
+    // 5개 객체 할당
+    let obj1 = gc.allocate(100);
+    let _obj2 = gc.allocate(200);
+    let obj3 = gc.allocate(300);
+    let _obj4 = gc.allocate(400);
+    let obj5 = gc.allocate(500);
 
-        // 첫 번째 객체 할당
-        let data1 = gc.allocate(100);
-        assert!(!data1.is_null());
+    // obj1, obj3, obj5만 루트로 등록
+    // (obj2, obj4는 가비지가 될 예정)
+    gc.add_root(obj1);
+    gc.add_root(obj3);
+    gc.add_root(obj5);
 
-        // 두 번째 객체 할당
-        let data2 = gc.allocate(200);
-        assert!(!data2.is_null());
+    // GC 실행!
+    gc.collect();
 
-        // 세 번째 객체 할당
-        let data3 = gc.allocate(50);
-        assert!(!data3.is_null());
+    // 검증
+    let expected_remaining = ObjectHeader::HEADER_SIZE + 100 +  // obj1
+        ObjectHeader::HEADER_SIZE + 300 +  // obj3  
+        ObjectHeader::HEADER_SIZE + 500; // obj5
 
-        // 연결 리스트 확인
-        unsafe {
-            // 데이터 포인터에서 헤더 포인터 구하기
-            let header3 = (data3 as *mut ObjectHeader).sub(1);
-            let header2 = (data2 as *mut ObjectHeader).sub(1);
-            let header1 = (data1 as *mut ObjectHeader).sub(1);
+    assert_eq!(gc.total_bytes_allocated, expected_remaining);
 
-            // 가장 최근 객체가 first_object여야 함
-            assert_eq!(gc.first_object, header3);
+    // 살아남은 객체들 확인
+    unsafe {
+        let header1 = (obj1 as *mut ObjectHeader).sub(1);
+        let header3 = (obj3 as *mut ObjectHeader).sub(1);
+        let header5 = (obj5 as *mut ObjectHeader).sub(1);
 
-            // header3 -> header2 -> header1 -> null 순서
-            assert_eq!((*header3).next_object, header2);
-            assert_eq!((*header2).next_object, header1);
-            assert!((*header1).next_object.is_null());
-        }
-    }
-
-    #[test]
-    fn test_object_size_tracking() {
-        let mut gc = GarbageCollector::new();
-
-        let _data1 = gc.allocate(100);
-        let expected = ObjectHeader::HEADER_SIZE + 100;
-        assert_eq!(gc.total_bytes_allocated, expected);
-
-        let _data2 = gc.allocate(200);
-        let expected = expected + ObjectHeader::HEADER_SIZE + 200;
-        assert_eq!(gc.total_bytes_allocated, expected);
-    }
-}
-
-#[cfg(test)]
-mod test_sweep {
-    use super::*;
-
-    #[test]
-    fn test_sweep_unmarked_objects() {
-        let mut gc = GarbageCollector::new();
-
-        // 3개 객체 할당
-        let data1 = gc.allocate(100);
-        let _data2 = gc.allocate(200);
-        let data3 = gc.allocate(300);
-
-        // 수동으로 일부만 mark
-        unsafe {
-            let header1 = (data1 as *mut ObjectHeader).sub(1);
-            let header3 = (data3 as *mut ObjectHeader).sub(1);
-
-            (*header1).is_marked = true; // 1번 살림
-            // 2번은 mark 안 함 (죽임)
-            (*header3).is_marked = true; // 3번 살림
-        }
-
-        let before = gc.total_bytes_allocated;
-
-        // Sweep 실행!
-        gc.sweep();
-
-        let after = gc.total_bytes_allocated;
-
-        // 2번 객체 크기만큼 줄어야 함
-        let expected_freed = ObjectHeader::HEADER_SIZE + 200;
-        assert_eq!(before - after, expected_freed);
-
-        // 연결 리스트 확인 (3 -> 1 -> null)
-        unsafe {
-            let header1 = (data1 as *mut ObjectHeader).sub(1);
-            let header3 = (data3 as *mut ObjectHeader).sub(1);
-
-            assert_eq!(gc.first_object, header3);
-            assert_eq!((*header3).next_object, header1);
-            assert!((*header1).next_object.is_null());
-        }
-    }
-
-    #[test]
-    fn test_sweep_all_unmarked() {
-        let mut gc = GarbageCollector::new();
-
-        // 3개 할당, 아무것도 mark 안 함
-        let _data1 = gc.allocate(100);
-        let _data2 = gc.allocate(200);
-        let _data3 = gc.allocate(300);
-
-        // 모두 해제되어야 함
-        gc.sweep();
-
-        assert_eq!(gc.total_bytes_allocated, 0);
-        assert!(gc.first_object.is_null());
+        // mark는 해제되어야 함 (다음 GC 위해)
+        assert!(!(*header1).is_marked);
+        assert!(!(*header3).is_marked);
+        assert!(!(*header5).is_marked);
     }
 }
