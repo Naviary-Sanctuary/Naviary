@@ -1,30 +1,8 @@
+use super::object::{IntegerObject, NaviaryInt, ObjectHeader, ObjectType};
 use std::{
     alloc::{Layout, alloc, dealloc},
     mem, ptr,
 };
-
-// - 필드 순서를 우리가 정한대로 보장함
-// - 포인터 연산으로 헤더와 데이터 사이를 이동 가능
-// - 메모리 정렬을 보장함
-#[repr(C)]
-pub struct ObjectHeader {
-    is_marked: bool,
-
-    // 가변포인터를 사용하는 이유
-    // - 마지막 객체는 null
-    // - 나중에 이 필드가 수정되어야함
-    next_object: *mut ObjectHeader,
-
-    // 헤더 + 데이터 사이즈
-    object_size: usize,
-}
-
-impl ObjectHeader {
-    const HEADER_SIZE: usize = mem::size_of::<ObjectHeader>();
-
-    // 헤더 정렬 요구사항
-    const HEADER_ALIGN: usize = mem::align_of::<ObjectHeader>();
-}
 
 pub struct GarbageCollector {
     first_object: *mut ObjectHeader,
@@ -49,13 +27,12 @@ impl GarbageCollector {
             return;
         }
 
-        let header_ptr = unsafe { (data_ptr as *mut ObjectHeader).sub(1) };
+        let header_ptr = data_ptr as *mut ObjectHeader;
 
         if !self.root_objects.contains(&header_ptr) {
             self.root_objects.push(header_ptr);
         }
     }
-
     pub fn remove_root(&mut self, data_ptr: *mut u8) {
         if data_ptr.is_null() {
             return;
@@ -91,51 +68,42 @@ impl GarbageCollector {
     pub fn collect(&mut self) {
         self.mark();
         self.sweep();
+        self.garbage_collection_threshold = std::cmp::max(self.total_bytes_allocated * 2, 1024);
     }
 
-    // 현재는 시스템 malloc 호출만 한다.
-    pub fn allocate(&mut self, size: usize) -> *mut u8 {
-        // 사이즈 계산
-        let header_size = ObjectHeader::HEADER_SIZE;
-        let total_size = size + header_size;
+    pub fn allocate_integer(&mut self, value: NaviaryInt) -> *mut IntegerObject {
+        let size = mem::size_of::<IntegerObject>();
 
-        if self.should_collect(total_size) {
+        if self.should_collect(size) {
             self.collect();
-
-            self.garbage_collection_threshold = std::cmp::max(self.total_bytes_allocated * 2, 1024);
         }
 
-        //메모리 할당
-        // 저수준 메모리 할당 API -> C의 malloc/free와 비슷함
-        let layout = Layout::from_size_align(total_size, ObjectHeader::HEADER_ALIGN)
-            .expect("Failed to create layout");
+        let layout = Layout::from_size_align(size, 8).unwrap();
+        let ptr = unsafe { alloc(layout) as *mut IntegerObject };
 
-        let header_ptr = unsafe {
-            alloc(layout) as *mut ObjectHeader // 메모리 할당
-        };
+        if ptr.is_null() {
+            panic!("Integer 할당 실패: Out of Memory");
+        }
 
-        // 헤더 초기화
         unsafe {
-            // *header_ptr는 뭔가요?
-            // 포인터가 가리키는 메모리에 직접 쓰기
-            // C의 *ptr = value와 같음
-            (*header_ptr) = ObjectHeader {
-                is_marked: false,               // 새 객체는 mark 안 됨
-                next_object: self.first_object, // 기존 리스트 앞에 추가
-                object_size: total_size,
+            (*ptr) = IntegerObject {
+                header: ObjectHeader {
+                    is_marked: false,
+                    next_object: self.first_object,
+                    object_size: size,
+                    object_type: ObjectType::Integer,
+                },
+                value,
             };
+
+            self.first_object = &mut (*ptr).header as *mut ObjectHeader;
         }
 
-        // linked 리스트 업데이트
-        self.first_object = header_ptr;
-        self.total_bytes_allocated += total_size;
+        self.total_bytes_allocated += size;
 
-        // 데이터 포인터 반환
-        // 사용자는 헤더 다음부터 사용
-        unsafe {
-            let data_ptr = (header_ptr as *mut u8).add(header_size);
-            data_ptr
-        }
+        println!("Integer({}) 할당: {:p}, {} bytes", value, ptr, size);
+
+        ptr
     }
 
     fn should_collect(&self, size: usize) -> bool {
@@ -180,52 +148,151 @@ impl GarbageCollector {
     }
 }
 
-#[test]
-fn test_automatic_gc_trigger() {
-    let mut gc = GarbageCollector::new();
+// src/runtime/garbage_collector.rs의 테스트 모듈에 추가
 
-    // 임계값을 낮게 설정 (테스트용)
-    gc.garbage_collection_threshold = 1000; // 1KB
+#[cfg(test)]
+mod test_object_allocation {
+    use super::*;
 
-    println!("초기 임계값: {} bytes", gc.garbage_collection_threshold);
+    #[test]
+    fn test_allocate_integer() {
+        let mut gc = GarbageCollector::new();
 
-    // 루트 없이 계속 할당 (모두 가비지)
-    for i in 0..10 {
-        let size = 200; // 각 200 bytes
-        let _obj = gc.allocate(size);
+        // Naviary: let x = 42;
+        let int_obj = gc.allocate_integer(42);
 
-        println!("할당 #{}: 총 {} bytes", i, gc.total_bytes_allocated);
+        // null이 아닌지 확인
+        assert!(!int_obj.is_null());
 
-        // 5번째쯤에 임계값 초과 → 자동 GC 발생!
-    }
+        unsafe {
+            // 값이 제대로 저장되었는지
+            assert_eq!((*int_obj).value, 42);
 
-    // GC가 실행되어서 메모리가 정리되었을 것
-    assert!(gc.total_bytes_allocated < 1000);
-}
+            // 타입이 맞는지
+            assert_eq!((*int_obj).header.object_type, ObjectType::Integer);
 
-#[test]
-fn test_gc_with_mixed_roots() {
-    let mut gc = GarbageCollector::new();
-    gc.garbage_collection_threshold = 2000; // 2KB
+            // 크기가 맞는지
+            assert_eq!(
+                (*int_obj).header.object_size,
+                std::mem::size_of::<IntegerObject>()
+            );
 
-    let mut roots = Vec::new();
-
-    // 20개 객체 할당 (일부만 루트로 유지)
-    for i in 0..20 {
-        let obj = gc.allocate(150);
-
-        // 짝수 번째만 루트로 유지
-        if i % 2 == 0 {
-            gc.add_root(obj);
-            roots.push(obj);
+            println!("Integer 객체 정보:");
+            println!("  주소: {:p}", int_obj);
+            println!("  값: {}", (*int_obj).value);
+            println!("  타입: {:?}", (*int_obj).header.object_type);
+            println!("  크기: {} bytes", (*int_obj).header.object_size);
         }
-        // 홀수 번째는 가비지가 됨
+
+        // 메모리 사용량 확인
+        assert_eq!(
+            gc.total_bytes_allocated,
+            std::mem::size_of::<IntegerObject>()
+        );
     }
 
-    println!("GC 후 남은 객체: {}", roots.len());
+    #[test]
+    fn test_multiple_integers() {
+        let mut gc = GarbageCollector::new();
 
-    // 루트 정리
-    for obj in roots {
-        gc.remove_root(obj);
+        // 여러 개 할당
+        let int1 = gc.allocate_integer(10);
+        let int2 = gc.allocate_integer(20);
+        let int3 = gc.allocate_integer(30);
+
+        // 다른 주소인지 확인
+        assert_ne!(int1, int2);
+        assert_ne!(int2, int3);
+
+        unsafe {
+            // 값들이 제대로 저장되었는지
+            assert_eq!((*int1).value, 10);
+            assert_eq!((*int2).value, 20);
+            assert_eq!((*int3).value, 30);
+
+            // 연결 리스트 확인
+            // 가장 최근 할당된 int3가 first_object여야 함
+            assert_eq!(gc.first_object, &(*int3).header as *const _ as *mut _);
+
+            // int3 -> int2 -> int1 -> null 순서
+            assert_eq!(
+                (*int3).header.next_object,
+                &(*int2).header as *const _ as *mut _
+            );
+            assert_eq!(
+                (*int2).header.next_object,
+                &(*int1).header as *const _ as *mut _
+            );
+            assert!((*int1).header.next_object.is_null());
+        }
+
+        // 총 메모리 확인
+        assert_eq!(
+            gc.total_bytes_allocated,
+            std::mem::size_of::<IntegerObject>() * 3
+        );
+    }
+
+    #[test]
+    fn test_integer_with_gc() {
+        let mut gc = GarbageCollector::new();
+
+        // 임계값을 충분히 크게 (GC 자동 실행 방지)
+        gc.garbage_collection_threshold = 1000;
+
+        let int_size = std::mem::size_of::<IntegerObject>();
+        println!("IntegerObject 크기: {} bytes", int_size);
+
+        // 10개 할당
+        let mut roots = Vec::new();
+
+        for i in 0..10 {
+            let int_obj = gc.allocate_integer(i * 10);
+
+            // 짝수만 루트로 등록 (0, 20, 40, 60, 80)
+            if i % 2 == 0 {
+                // IntegerObject를 u8 포인터로 변환할 때 주의!
+                // header의 주소가 아니라 객체의 주소를 전달
+                gc.add_root(int_obj as *mut u8);
+                roots.push(int_obj);
+                println!("루트 등록: Integer({})", i * 10);
+            }
+        }
+
+        println!("할당된 객체 수: 10");
+        println!("루트 객체 수: {}", roots.len());
+        println!("GC 전 메모리: {} bytes", gc.total_bytes_allocated);
+
+        // 수동 GC 실행
+        gc.collect();
+
+        println!("GC 후 메모리: {} bytes", gc.total_bytes_allocated);
+
+        // 살아남은 객체 확인
+        unsafe {
+            for (idx, &obj) in roots.iter().enumerate() {
+                let expected_value = (idx * 2) * 10; // 0, 20, 40, 60, 80
+                let actual_value = (*obj).value;
+
+                println!(
+                    "객체 {}: 예상={}, 실제={}",
+                    idx, expected_value, actual_value
+                );
+
+                assert_eq!(
+                    actual_value, expected_value as NaviaryInt,
+                    "객체 {}의 값이 잘못됨",
+                    idx
+                );
+            }
+        }
+
+        // 5개만 살아남아야 함
+        let expected_objects = 5;
+        let expected_memory = int_size * expected_objects;
+        assert_eq!(
+            gc.total_bytes_allocated, expected_memory,
+            "메모리 크기가 예상과 다름"
+        );
     }
 }
