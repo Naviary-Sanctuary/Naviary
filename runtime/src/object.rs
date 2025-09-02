@@ -183,7 +183,7 @@ pub struct StringArrayObject {
     pub header: ObjectHeader,
     pub length: usize,
     pub capacity: usize,
-    pub elements: *mut StringObject,
+    pub elements: *mut *mut StringObject,
 }
 
 impl StringArrayObject {
@@ -192,21 +192,19 @@ impl StringArrayObject {
             panic!("Array index out of bounds: {} >= {}", index, self.length);
         }
 
-        unsafe { self.elements.add(index) }
+        unsafe { *self.elements.add(index) }
     }
 
-    pub unsafe fn set(&mut self, index: usize, value: StringObject) {
+    pub unsafe fn set(&mut self, index: usize, value: *mut StringObject) {
         if index >= self.length {
             panic!("Array index out of bounds: {} >= {}", index, self.length);
         }
 
-        unsafe {
-            *self.elements.add(index) = value;
-        }
+        unsafe { *self.elements.add(index) = value };
     }
 
     // 요소 추가 (나중에 구현)
-    pub unsafe fn push(&mut self, value: StringObject) {
+    pub unsafe fn push(&mut self, value: *mut StringObject) {
         if self.length >= self.capacity {
             panic!("Array is full, resize needed");
             // TODO: resize
