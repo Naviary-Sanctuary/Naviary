@@ -1,4 +1,4 @@
-use super::object::{IntegerObject, NaviaryInt, ObjectHeader, ObjectType, StringObject};
+use super::object::{ObjectHeader, ObjectType, StringObject};
 use std::{
     alloc::{Layout, alloc, dealloc},
     mem, ptr,
@@ -69,39 +69,6 @@ impl GarbageCollector {
         self.mark();
         self.sweep();
         self.garbage_collection_threshold = std::cmp::max(self.total_bytes_allocated * 2, 1024);
-    }
-
-    pub fn allocate_integer(&mut self, value: NaviaryInt) -> *mut IntegerObject {
-        let size = mem::size_of::<IntegerObject>();
-
-        if self.should_collect(size) {
-            self.collect();
-        }
-
-        let layout = Layout::from_size_align(size, 8).unwrap();
-        let ptr = unsafe { alloc(layout) as *mut IntegerObject };
-
-        if ptr.is_null() {
-            panic!("Integer allocation failed: Out of Memory");
-        }
-
-        unsafe {
-            (*ptr) = IntegerObject {
-                header: ObjectHeader {
-                    is_marked: false,
-                    next_object: self.first_object,
-                    object_size: size,
-                    object_type: ObjectType::Integer,
-                },
-                value,
-            };
-
-            self.first_object = &mut (*ptr).header as *mut ObjectHeader;
-        }
-
-        self.total_bytes_allocated += size;
-
-        ptr
     }
 
     pub fn allocate_string(&mut self, text: &str) -> *mut StringObject {
@@ -182,146 +149,9 @@ impl GarbageCollector {
     }
 }
 
-// src/runtime/garbage_collector.rs의 테스트 모듈에 추가
-
 #[cfg(test)]
 mod test_object_allocation {
     use super::*;
-
-    #[test]
-    fn test_allocate_integer() {
-        let mut gc = GarbageCollector::new();
-
-        // Naviary: let x = 42;
-        let int_obj = gc.allocate_integer(42);
-
-        // null이 아닌지 확인
-        assert!(!int_obj.is_null());
-
-        unsafe {
-            // 값이 제대로 저장되었는지
-            assert_eq!((*int_obj).value, 42);
-
-            // 타입이 맞는지
-            assert_eq!((*int_obj).header.object_type, ObjectType::Integer);
-
-            // 크기가 맞는지
-            assert_eq!(
-                (*int_obj).header.object_size,
-                std::mem::size_of::<IntegerObject>()
-            );
-
-            println!("Integer 객체 정보:");
-            println!("  주소: {:p}", int_obj);
-            println!("  값: {}", (*int_obj).value);
-            println!("  타입: {:?}", (*int_obj).header.object_type);
-            println!("  크기: {} bytes", (*int_obj).header.object_size);
-        }
-
-        // 메모리 사용량 확인
-        assert_eq!(
-            gc.total_bytes_allocated,
-            std::mem::size_of::<IntegerObject>()
-        );
-    }
-
-    #[test]
-    fn test_multiple_integers() {
-        let mut gc = GarbageCollector::new();
-
-        // 여러 개 할당
-        let int1 = gc.allocate_integer(10);
-        let int2 = gc.allocate_integer(20);
-        let int3 = gc.allocate_integer(30);
-
-        // 다른 주소인지 확인
-        assert_ne!(int1, int2);
-        assert_ne!(int2, int3);
-
-        unsafe {
-            // 값들이 제대로 저장되었는지
-            assert_eq!((*int1).value, 10);
-            assert_eq!((*int2).value, 20);
-            assert_eq!((*int3).value, 30);
-
-            // 연결 리스트 확인
-            // 가장 최근 할당된 int3가 first_object여야 함
-            assert_eq!(gc.first_object, &(*int3).header as *const _ as *mut _);
-
-            // int3 -> int2 -> int1 -> null 순서
-            assert_eq!(
-                (*int3).header.next_object,
-                &(*int2).header as *const _ as *mut _
-            );
-            assert_eq!(
-                (*int2).header.next_object,
-                &(*int1).header as *const _ as *mut _
-            );
-            assert!((*int1).header.next_object.is_null());
-        }
-
-        // 총 메모리 확인
-        assert_eq!(
-            gc.total_bytes_allocated,
-            std::mem::size_of::<IntegerObject>() * 3
-        );
-    }
-
-    #[test]
-    fn test_integer_with_gc() {
-        let mut gc = GarbageCollector::new();
-
-        // GC 자동 실행 방지
-        gc.garbage_collection_threshold = 10000;
-
-        let int_size = std::mem::size_of::<IntegerObject>();
-        println!("IntegerObject 크기: {} bytes", int_size);
-
-        // 객체들 할당
-        let obj0 = gc.allocate_integer(0);
-        let _obj1 = gc.allocate_integer(10);
-        let obj2 = gc.allocate_integer(20);
-        let _obj3 = gc.allocate_integer(30);
-        let obj4 = gc.allocate_integer(40);
-
-        // 일부만 루트로 등록
-        gc.add_root(obj0 as *mut u8); // 0 유지
-        gc.add_root(obj2 as *mut u8); // 20 유지
-        gc.add_root(obj4 as *mut u8); // 40 유지
-        // obj1(10), obj3(30)은 가비지
-
-        println!("GC 전:");
-        println!("  총 객체: 5");
-        println!("  루트: 3 (0, 20, 40)");
-        println!("  메모리: {} bytes", gc.total_bytes_allocated);
-
-        // GC 실행
-        gc.collect();
-
-        println!("GC 후:");
-        println!("  메모리: {} bytes", gc.total_bytes_allocated);
-
-        // 살아있는 객체 확인
-        unsafe {
-            assert_eq!((*obj0).value, 0, "obj0 살아있어야 함");
-            assert_eq!((*obj2).value, 20, "obj2 살아있어야 함");
-            assert_eq!((*obj4).value, 40, "obj4 살아있어야 함");
-
-            // obj1, obj3는 해제되었으므로 접근하면 안 됨!
-            // (Undefined Behavior)
-        }
-
-        // 3개 객체만 남아야 함
-        assert_eq!(gc.total_bytes_allocated, int_size * 3);
-
-        // 루트 정리
-        gc.remove_root(obj0 as *mut u8);
-        gc.remove_root(obj2 as *mut u8);
-        gc.remove_root(obj4 as *mut u8);
-    }
-
-    // src/runtime/garbage_collector.rs의 테스트 모듈에 추가
-
     #[test]
     fn test_allocate_string() {
         let mut gc = GarbageCollector::new();
@@ -406,9 +236,9 @@ mod test_object_allocation {
 
         // 여러 문자열 할당
         let str1 = gc.allocate_string("Keep me"); // 7 chars
-        let str2 = gc.allocate_string("Delete me"); // 9 chars
+        let _str2 = gc.allocate_string("Delete me"); // 9 chars
         let str3 = gc.allocate_string("Keep too"); // 8 chars
-        let str4 = gc.allocate_string("Delete too"); // 10 chars
+        let _str4 = gc.allocate_string("Delete too"); // 10 chars
 
         // 일부만 루트로 등록
         gc.add_root(str1 as *mut u8);

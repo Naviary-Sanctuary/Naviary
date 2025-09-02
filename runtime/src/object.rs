@@ -3,12 +3,12 @@ use std::mem;
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ObjectType {
-    Integer,
-    Float,
     String,
-    Boolean,
-    Array,
-    Nil,
+    IntArray,
+    FloatArray,
+    BoolArray,
+    StringArray,
+    // TODO: AnyArray
 }
 
 // - 필드 순서를 우리가 정한대로 보장함
@@ -41,23 +41,7 @@ pub type NaviaryInt = i32;
 #[cfg(target_pointer_width = "64")]
 pub type NaviaryInt = i64;
 
-#[repr(C)]
-pub struct IntegerObject {
-    pub header: ObjectHeader,
-    pub value: NaviaryInt,
-}
-
-#[repr(C)]
-pub struct FloatObject {
-    pub header: ObjectHeader,
-    pub value: f64,
-}
-
-#[repr(C)]
-pub struct BooleanObject {
-    pub header: ObjectHeader,
-    pub value: bool,
-}
+pub type NaviaryFloat = f64;
 
 #[repr(C)]
 pub struct StringObject {
@@ -78,34 +62,158 @@ impl StringObject {
 }
 
 #[repr(C)]
-pub struct ArrayObject {
+pub struct IntArrayObject {
     pub header: ObjectHeader,
     pub length: usize,
     pub capacity: usize,
-    pub elements: *mut *mut ObjectHeader,
+    pub elements: *mut NaviaryInt,
 }
 
-impl ArrayObject {
-    pub unsafe fn get_elements(&self, index: usize) -> *mut ObjectHeader {
+impl IntArrayObject {
+    pub unsafe fn get(&self, index: usize) -> NaviaryInt {
         if index >= self.length {
-            panic!("Array index out of bounds");
+            panic!("Array index out of bounds {} >= {}", index, self.length);
         }
 
         unsafe { *self.elements.add(index) }
     }
 
-    pub unsafe fn set_element(&self, index: usize, value: *mut ObjectHeader) {
+    pub unsafe fn set(&self, index: usize, value: NaviaryInt) {
         if index >= self.length {
-            panic!("Array index out of bounds");
+            panic!("Array index out of bounds {} >= {}", index, self.length);
         }
 
         unsafe {
             *self.elements.add(index) = value;
         }
     }
+
+    pub unsafe fn push(&self, value: NaviaryInt) {
+        if self.length >= self.capacity {
+            panic!("Array capacity reached");
+            //TODO: resize
+        }
+
+        unsafe {
+            *self.elements.add(self.length) = value;
+        }
+    }
 }
 
 #[repr(C)]
-pub struct NilObject {
+pub struct FloatArrayObject {
     pub header: ObjectHeader,
+    pub length: usize,
+    pub capacity: usize,
+    pub elements: *mut NaviaryFloat,
+}
+
+impl FloatArrayObject {
+    // 요소 접근 헬퍼
+    pub unsafe fn get(&self, index: usize) -> NaviaryFloat {
+        if index >= self.length {
+            panic!("Array index out of bounds: {} >= {}", index, self.length);
+        }
+        unsafe { *self.elements.add(index) }
+    }
+
+    pub unsafe fn set(&mut self, index: usize, value: NaviaryFloat) {
+        if index >= self.length {
+            panic!("Array index out of bounds: {} >= {}", index, self.length);
+        }
+        unsafe {
+            *self.elements.add(index) = value;
+        }
+    }
+
+    // 요소 추가 (나중에 구현)
+    pub unsafe fn push(&mut self, value: NaviaryFloat) {
+        if self.length >= self.capacity {
+            panic!("Array is full, resize needed");
+            // TODO: resize
+        }
+        unsafe {
+            *self.elements.add(self.length) = value;
+        }
+        self.length += 1;
+    }
+}
+
+#[repr(C)]
+pub struct BoolArrayObject {
+    pub header: ObjectHeader,
+    pub length: usize,
+    pub capacity: usize,
+    pub elements: *mut bool,
+}
+
+impl BoolArrayObject {
+    // 요소 접근 헬퍼
+    pub unsafe fn get(&self, index: usize) -> bool {
+        if index >= self.length {
+            panic!("Array index out of bounds: {} >= {}", index, self.length);
+        }
+        unsafe { *self.elements.add(index) }
+    }
+
+    pub unsafe fn set(&mut self, index: usize, value: bool) {
+        if index >= self.length {
+            panic!("Array index out of bounds: {} >= {}", index, self.length);
+        }
+        unsafe {
+            *self.elements.add(index) = value;
+        }
+    }
+
+    // 요소 추가 (나중에 구현)
+    pub unsafe fn push(&mut self, value: bool) {
+        if self.length >= self.capacity {
+            panic!("Array is full, resize needed");
+            // TODO: resize
+        }
+        unsafe {
+            *self.elements.add(self.length) = value;
+        }
+        self.length += 1;
+    }
+}
+
+#[repr(C)]
+pub struct StringArrayObject {
+    pub header: ObjectHeader,
+    pub length: usize,
+    pub capacity: usize,
+    pub elements: *mut StringObject,
+}
+
+impl StringArrayObject {
+    pub unsafe fn get(&self, index: usize) -> *mut StringObject {
+        if index >= self.length {
+            panic!("Array index out of bounds: {} >= {}", index, self.length);
+        }
+
+        unsafe { self.elements.add(index) }
+    }
+
+    pub unsafe fn set(&mut self, index: usize, value: StringObject) {
+        if index >= self.length {
+            panic!("Array index out of bounds: {} >= {}", index, self.length);
+        }
+
+        unsafe {
+            *self.elements.add(index) = value;
+        }
+    }
+
+    // 요소 추가 (나중에 구현)
+    pub unsafe fn push(&mut self, value: StringObject) {
+        if self.length >= self.capacity {
+            panic!("Array is full, resize needed");
+            // TODO: resize
+        }
+        unsafe {
+            *self.elements.add(self.length) = value;
+        }
+        self.length += 1;
+    }
 }
