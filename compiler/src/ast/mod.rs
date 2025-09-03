@@ -9,6 +9,41 @@ pub enum Type {
     Float,
     String,
     Bool,
+
+    // Array
+    IntArray,
+    FloatArray,
+    StringArray,
+    BoolArray,
+}
+
+impl Type {
+    pub fn is_array(&self) -> bool {
+        matches!(
+            self,
+            Type::IntArray | Type::FloatArray | Type::StringArray | Type::BoolArray
+        )
+    }
+
+    pub fn element_type(&self) -> Option<Type> {
+        match self {
+            Type::IntArray => Some(Type::Int),
+            Type::FloatArray => Some(Type::Float),
+            Type::StringArray => Some(Type::String),
+            Type::BoolArray => Some(Type::Bool),
+            _ => None,
+        }
+    }
+
+    pub fn to_array_type(&self) -> Option<Type> {
+        match self {
+            Type::Int => Some(Type::IntArray),
+            Type::Float => Some(Type::FloatArray),
+            Type::String => Some(Type::StringArray),
+            Type::Bool => Some(Type::BoolArray),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
