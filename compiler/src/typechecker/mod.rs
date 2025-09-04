@@ -190,12 +190,32 @@ impl TypeChecker {
                 value,
                 mutable,
             } => {
-                // 값의 타입 추론
+                if let Expression::Array { elements } = value {
+                    if elements.is_empty() {
+                        // 빈 배열인 경우 타입 명시 필수
+                        if let Some(declared_type) = ty {
+                            if !declared_type.is_array() {
+                                bail!(
+                                    "Type mismatch: empty array literal requires array type, got {:?}",
+                                    declared_type
+                                );
+                            }
+                            // 타입 명시가 있으면 OK
+                            self.declare_variable(name.clone(), declared_type.clone(), *mutable)?;
+                            return Ok(());
+                        } else {
+                            bail!("Empty array requires type annotation: let arr: int[] = []");
+                        }
+                    }
+                }
+
+                // 일반적인 경우
                 let value_type = self.infer_expression_type(value)?;
 
-                // 명시된 타입이 있으면 일치하는지 확인
                 let var_type = if let Some(declared_type) = ty {
+                    // 타입 일치 검사
                     if *declared_type != value_type {
+                        // 빈 배열이 아닌데 타입이 다르면 에러
                         bail!(
                             "Type mismatch: variable '{}' declared as {:?} but initialized with {:?}",
                             name,
@@ -205,23 +225,30 @@ impl TypeChecker {
                     }
                     declared_type.clone()
                 } else {
-                    // 타입 추론
                     value_type
                 };
 
-                // 변수 등록
                 self.declare_variable(name.clone(), var_type, *mutable)?;
             }
 
             Statement::Assignment { name, value } => {
                 let info = self.lookup(name)?;
 
-                if info.function_kind.is_some() {
-                    bail!("Cannot assign to function '{}'", name);
-                }
-
                 if !info.is_mutable {
                     bail!("Cannot assign to immutable variable '{}'", name);
+                }
+
+                if let Expression::Index { object, index } = value.as_ref() {
+                    let object_type = self.infer_expression_type(object)?;
+                    let index_type = self.infer_expression_type(index)?;
+
+                    if index_type != Type::Int {
+                        bail!("Array index must be int");
+                    }
+
+                    if !object_type.is_array() {
+                        bail!("Cannot index non-array type");
+                    }
                 }
 
                 let value_type = self.infer_expression_type(value)?;
@@ -492,6 +519,54 @@ impl TypeChecker {
                         })
                     }
                     None => bail!("'{}' is not a function", name),
+                }
+            }
+            Expression::Array { elements } => {
+                if elements.is_empty() {
+                    // 빈 배열은 타입 추론 불가 - 하지만 이건 Statement::Let에서 처리됨
+                    bail!("Cannot infer type of empty array in expression context");
+                }
+
+                // 첫 번째 요소의 타입을 기준으로 함
+                let first_type = self.infer_expression_type(&elements[0])?;
+
+                // 모든 요소가 같은 타입인지 검증
+                for (index, element) in elements.iter().enumerate().skip(1) {
+                    let element_type = self.infer_expression_type(element)?;
+                    if element_type != first_type {
+                        bail!(
+                            "Array element type mismatch at index {}: expected {:?}, found {:?}",
+                            index,
+                            first_type,
+                            element_type
+                        );
+                    }
+                }
+
+                // 배열 타입 반환
+                match first_type {
+                    Type::Int => Ok(Type::IntArray),
+                    Type::Float => Ok(Type::FloatArray),
+                    Type::String => Ok(Type::StringArray),
+                    Type::Bool => Ok(Type::BoolArray),
+                    _ => bail!("Arrays of type {:?} are not supported yet", first_type),
+                }
+            }
+
+            Expression::Index { object, index } => {
+                let object_type = self.infer_expression_type(object)?;
+                let index_type = self.infer_expression_type(index)?;
+
+                if index_type != Type::Int {
+                    bail!("Array index must be an integer, found {:?}", index_type);
+                }
+
+                match object_type {
+                    Type::IntArray => Ok(Type::Int),
+                    Type::FloatArray => Ok(Type::Float),
+                    Type::StringArray => Ok(Type::String),
+                    Type::BoolArray => Ok(Type::Bool),
+                    _ => bail!("Cannot index into array of type {:?}", object_type),
                 }
             }
         }

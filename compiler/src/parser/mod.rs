@@ -135,15 +135,43 @@ impl<'a> Parser<'a> {
 
     // 타입 파싱
     fn parse_type(&mut self) -> Result<Type> {
-        let ty = match &self.current_token {
-            Some(Token::Int) => Type::Int,
-            Some(Token::Float) => Type::Float,
-            Some(Token::String) => Type::String,
-            Some(Token::Bool) => Type::Bool,
+        // 기본 타입 파싱
+        let base_type = match &self.current_token {
+            Some(Token::Int) => {
+                self.advance();
+                Type::Int
+            }
+            Some(Token::Float) => {
+                self.advance();
+                Type::Float
+            }
+            Some(Token::String) => {
+                self.advance();
+                Type::String
+            }
+            Some(Token::Bool) => {
+                self.advance();
+                Type::Bool
+            }
             _ => bail!("Expected type, found {:?}", self.current_token),
         };
-        self.advance();
-        Ok(ty)
+
+        // 배열 타입 체크 (int[], float[] 등)
+        if self.peek() == Some(&Token::LeftBracket) {
+            self.advance(); // '[' 소비
+            self.expect(Token::RightBracket)?; // ']' 기대
+
+            // 기본 타입을 배열 타입으로 변환
+            match base_type {
+                Type::Int => Ok(Type::IntArray),
+                Type::Float => Ok(Type::FloatArray),
+                Type::String => Ok(Type::StringArray),
+                Type::Bool => Ok(Type::BoolArray),
+                _ => bail!("Cannot create array of type {:?}", base_type),
+            }
+        } else {
+            Ok(base_type)
+        }
     }
 
     // 블록 파싱 { statements }
@@ -411,6 +439,16 @@ impl<'a> Parser<'a> {
                     let args = self.parse_argument_list()?;
                     self.expect(Token::RightParen)?;
                     Ok(Expression::Call { name, args })
+                } else if self.peek() == Some(&Token::LeftBracket) {
+                    self.advance();
+                    let index = self.parse_expression()?;
+
+                    self.expect(Token::RightBracket)?;
+
+                    Ok(Expression::Index {
+                        object: Box::new(Expression::Identifier(name)),
+                        index: Box::new(index),
+                    })
                 } else {
                     // 단순 변수 참조
                     Ok(Expression::Identifier(name))
@@ -422,6 +460,35 @@ impl<'a> Parser<'a> {
                 let expr = self.parse_expression()?;
                 self.expect(Token::RightParen)?;
                 Ok(expr)
+            }
+            Some(Token::LeftBracket) => {
+                self.advance();
+
+                let mut elements = Vec::new();
+
+                if self.peek() == Some(&Token::RightBracket) {
+                    self.advance();
+                    return Ok(Expression::Array { elements });
+                }
+
+                loop {
+                    elements.push(self.parse_expression()?);
+
+                    if self.peek() == Some(&Token::Comma) {
+                        self.advance();
+
+                        if self.peek() == Some(&Token::RightBracket) {
+                            panic!("Unexpected token in expression: {:?}", self.current_token);
+                        }
+                    } else if self.peek() == Some(&Token::RightBracket) {
+                        self.advance();
+                        break;
+                    } else {
+                        panic!("Unexpected token in expression: {:?}", self.current_token);
+                    }
+                }
+
+                Ok(Expression::Array { elements })
             }
             _ => bail!("Unexpected token in expression: {:?}", self.current_token),
         }

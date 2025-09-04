@@ -25,40 +25,167 @@ impl<'ctx> CodeGenerator<'ctx> {
         let module = context.create_module(module_name);
         let builder = context.create_builder();
 
-        CodeGenerator {
+        let mut code_generator = CodeGenerator {
             context,
             module,
             builder,
             variables: HashMap::new(),
             functions: HashMap::new(),
             current_function: None,
-        }
+        };
+
+        code_generator.declare_external_functions();
+
+        code_generator
+    }
+
+    fn get_native_int_type(&self) -> inkwell::types::IntType<'ctx> {
+        #[cfg(target_pointer_width = "64")]
+        return self.context.i64_type();
+
+        #[cfg(target_pointer_width = "32")]
+        return self.context.i32_type();
+    }
+
+    fn get_size_type(&self) -> inkwell::types::IntType<'ctx> {
+        // 포인터와 같은 크기 (usize에 해당)
+        #[cfg(target_pointer_width = "64")]
+        return self.context.i64_type();
+
+        #[cfg(target_pointer_width = "32")]
+        return self.context.i32_type();
+    }
+
+    fn declare_external_functions(&mut self) {
+        self.declare_c_standard_functions();
+        self.declare_runtime_functions();
     }
 
     // 내장 함수 선언
-    fn declare_builtin_functions(&mut self) {
+    fn declare_c_standard_functions(&mut self) {
         let i32_type = self.context.i32_type();
-        let i8_ptr_type = self
-            .context
-            .i8_type()
-            .ptr_type(inkwell::AddressSpace::default());
+        let i8_ptr_type = self.context.ptr_type(inkwell::AddressSpace::default());
 
+        // printf - C 표준 출력 함수
         let printf_type = i32_type.fn_type(
             &[i8_ptr_type.into()],
             true, // variadic (가변 인자)
         );
-
         let printf_fn = self.module.add_function("printf", printf_type, None);
         self.functions.insert("printf".to_string(), printf_fn);
+    }
+
+    fn declare_runtime_functions(&mut self) {
+        self.declare_runtime_memory_functions();
+        self.declare_runtime_array_functions();
+    }
+    fn declare_runtime_memory_functions(&mut self) {
+        let i8_ptr_type = self.context.ptr_type(inkwell::AddressSpace::default());
+        let size_type = self.get_size_type(); // 플랫폼 의존적 (i32 또는 i64)
+
+        // GC 초기화 - 인자 없음
+        let gc_init_type = i8_ptr_type.fn_type(&[], false);
+        self.module
+            .add_function("naviary_gc_init", gc_init_type, None);
+
+        // GC 실행 - GC 포인터만 받음
+        let gc_collect_type = self
+            .context
+            .void_type()
+            .fn_type(&[i8_ptr_type.into()], false);
+        self.module
+            .add_function("naviary_gc_collect", gc_collect_type, None);
+
+        // 메모리 할당 - naviary_alloc(gc: *mut GC, size: usize) -> *mut u8
+        let alloc_type = i8_ptr_type.fn_type(
+            &[i8_ptr_type.into(), size_type.into()], // size는 플랫폼 의존적
+            false,
+        );
+        self.module.add_function("naviary_alloc", alloc_type, None);
+
+        // 루트 추가/제거 (GC 루트 관리)
+        let add_root_type = self
+            .context
+            .void_type()
+            .fn_type(&[i8_ptr_type.into(), i8_ptr_type.into()], false);
+        self.module
+            .add_function("naviary_gc_add_root", add_root_type, None);
+        self.module
+            .add_function("naviary_gc_remove_root", add_root_type, None);
+    }
+
+    fn declare_runtime_array_functions(&mut self) {
+        let size_type = self.get_size_type();
+        let native_int_type = self.get_native_int_type();
+        let float_type = self.context.f64_type();
+        let bool_type = self.context.bool_type();
+        let i8_ptr_type = self.context.ptr_type(inkwell::AddressSpace::default());
+
+        // Int 배열 함수들
+        self.declare_array_functions_for_type("int", native_int_type.into(), size_type);
+
+        // Float 배열 함수들
+        self.declare_array_functions_for_type("float", float_type.into(), size_type);
+
+        // Bool 배열 함수들
+        self.declare_array_functions_for_type("bool", bool_type.into(), size_type);
+
+        // String 배열 함수들
+        self.declare_array_functions_for_type("string", i8_ptr_type.into(), size_type);
+    }
+
+    fn declare_array_functions_for_type(
+        &mut self,
+        type_name: &str,
+        element_type: BasicTypeEnum<'ctx>,
+        size_type: inkwell::types::IntType<'ctx>,
+    ) {
+        let i8_ptr_type = self.context.ptr_type(inkwell::AddressSpace::default());
+
+        // naviary_allocate_{type}_array(gc: *GC, capacity: size_t) -> *Array
+        let alloc_fn_name = format!("naviary_allocate_{}_array", type_name);
+        let alloc_type = i8_ptr_type.fn_type(&[i8_ptr_type.into(), size_type.into()], false);
+        self.module.add_function(&alloc_fn_name, alloc_type, None);
+
+        // naviary_array_get_{type}(array: *Array, index: size_t) -> element
+        let get_fn_name = format!("naviary_array_get_{}", type_name);
+        let get_type = match element_type {
+            BasicTypeEnum::IntType(t) => t.fn_type(&[i8_ptr_type.into(), size_type.into()], false),
+            BasicTypeEnum::FloatType(t) => {
+                t.fn_type(&[i8_ptr_type.into(), size_type.into()], false)
+            }
+            BasicTypeEnum::PointerType(t) => {
+                t.fn_type(&[i8_ptr_type.into(), size_type.into()], false)
+            }
+            _ => panic!("Unsupported array element type"),
+        };
+        self.module.add_function(&get_fn_name, get_type, None);
+
+        // naviary_array_set_{type}(array: *Array, index: size_t, value: element)
+        let set_fn_name = format!("naviary_array_set_{}", type_name);
+        let set_type = self.context.void_type().fn_type(
+            &[i8_ptr_type.into(), size_type.into(), element_type.into()],
+            false,
+        );
+        self.module.add_function(&set_fn_name, set_type, None);
+
+        // naviary_array_len_{type}(array: *Array) -> size_t
+        let len_fn_name = format!("naviary_array_len_{}", type_name);
+        let len_type = size_type.fn_type(&[i8_ptr_type.into()], false);
+        self.module.add_function(&len_fn_name, len_type, None);
     }
 
     // AST 타입을 LLVM 타입으로 변환
     fn get_llvm_type(&self, ty: &Type) -> BasicTypeEnum<'ctx> {
         match ty {
-            Type::Int => self.context.i32_type().into(),
+            Type::Int => self.get_native_int_type().into(),
             Type::Float => self.context.f64_type().into(),
             Type::Bool => self.context.bool_type().into(),
             Type::String => self
+                .context
+                .ptr_type(inkwell::AddressSpace::default())
+                .into(),
+            Type::IntArray | Type::FloatArray | Type::StringArray | Type::BoolArray => self
                 .context
                 .ptr_type(inkwell::AddressSpace::default())
                 .into(),
@@ -67,9 +194,6 @@ impl<'ctx> CodeGenerator<'ctx> {
 
     // 프로그램 전체 컴파일
     pub fn compile_program(&mut self, program: &Program) -> Result<()> {
-        // 내장 함수 선언
-        self.declare_builtin_functions();
-
         // 모든 함수 선언 (전방 선언 지원)
         for func in &program.functions {
             self.declare_function(func)?;
@@ -208,14 +332,44 @@ impl<'ctx> CodeGenerator<'ctx> {
                 value,
                 mutable,
             } => {
-                // 값 계산
-                let val = self.compile_expression(value)?;
+                let var_type = if let Some(declared_type) = ty {
+                    declared_type.clone()
+                } else {
+                    match value {
+                        Expression::Array { elements } => {
+                            if elements.is_empty() {
+                                bail!("Cannot infer type of empty array without type annotation");
+                            }
+                            let elem_type = self.infer_expression_type(&elements[0])?;
+                            match elem_type {
+                                Type::Int => Type::IntArray,
+                                Type::Float => Type::FloatArray,
+                                Type::String => Type::StringArray,
+                                Type::Bool => Type::BoolArray,
+                                _ => bail!("Unsupported array element type: {:?}", elem_type),
+                            }
+                        }
+                        _ => self.infer_expression_type(value)?,
+                    }
+                };
 
-                // 변수를 위한 스택 공간 할당
-                let var_type = ty.as_ref().unwrap_or(&Type::Int); // 타입 추론된 경우 기본값 (실제로는 type checker가 처리)
-                let alloca = self.create_entry_block_alloca(name, var_type);
+                let val = match value {
+                    Expression::Array { elements } if elements.is_empty() => {
+                        // 빈 배열인 경우 타입에 따라 처리
+                        match &var_type {
+                            Type::IntArray => self.compile_int_array(&[])?,
+                            Type::FloatArray => self.compile_float_array(&[])?,
+                            Type::StringArray => self.compile_string_array(&[])?,
+                            Type::BoolArray => self.compile_bool_array(&[])?,
+                            _ => {
+                                bail!("Type mismatch: expected array type for empty array literal")
+                            }
+                        }
+                    }
+                    _ => self.compile_expression(value)?,
+                };
 
-                // 값 저장
+                let alloca = self.create_entry_block_alloca(name, &var_type);
                 self.builder.build_store(alloca, val)?;
                 self.variables
                     .insert(name.clone(), (alloca, var_type.clone(), *mutable));
@@ -406,6 +560,106 @@ impl<'ctx> CodeGenerator<'ctx> {
                 // 문자열 리터럴 (전역 상수로)
                 let val = self.builder.build_global_string_ptr(s, "str")?;
                 Ok(val.as_pointer_value().into())
+            }
+
+            Expression::Array { elements } => {
+                if elements.is_empty() {
+                    bail!("Cannot compile empty array without type context");
+                }
+
+                let element_type = self.infer_expression_type(&elements[0])?;
+
+                match element_type {
+                    Type::Int => self.compile_int_array(elements),
+                    Type::Float => self.compile_float_array(elements),
+                    Type::String => self.compile_string_array(elements),
+                    Type::Bool => self.compile_bool_array(elements),
+                    _ => bail!("Unsupported array element type: {:?}", element_type),
+                }
+            }
+
+            Expression::Index { object, index } => {
+                // 인덱스 값 먼저 컴파일
+                let index_value = self.compile_expression(index)?;
+
+                // 객체의 타입 확인
+                let array_type = self.infer_expression_type(object)?;
+
+                // 배열 포인터 가져오기
+                let array_ptr = self.compile_expression(object)?;
+
+                // 타입별 요소 접근
+                match array_type {
+                    Type::IntArray => {
+                        let get_fn = self
+                            .module
+                            .get_function("naviary_array_get_int")
+                            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+                        let result = self.builder.build_call(
+                            get_fn,
+                            &[array_ptr.into(), index_value.into()],
+                            "array_get_int",
+                        )?;
+
+                        Ok(result
+                            .try_as_basic_value()
+                            .left()
+                            .ok_or_else(|| anyhow::anyhow!("Expected return value"))?)
+                    }
+                    Type::FloatArray => {
+                        let get_fn = self
+                            .module
+                            .get_function("naviary_array_get_float")
+                            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+                        let result = self.builder.build_call(
+                            get_fn,
+                            &[array_ptr.into(), index_value.into()],
+                            "array_get_float",
+                        )?;
+
+                        Ok(result
+                            .try_as_basic_value()
+                            .left()
+                            .ok_or_else(|| anyhow::anyhow!("Expected return value"))?)
+                    }
+                    Type::BoolArray => {
+                        let get_fn = self
+                            .module
+                            .get_function("naviary_array_get_bool")
+                            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+                        let result = self.builder.build_call(
+                            get_fn,
+                            &[array_ptr.into(), index_value.into()],
+                            "array_get_bool",
+                        )?;
+
+                        Ok(result
+                            .try_as_basic_value()
+                            .left()
+                            .ok_or_else(|| anyhow::anyhow!("Expected return value"))?)
+                    }
+                    Type::StringArray => {
+                        let get_fn = self
+                            .module
+                            .get_function("naviary_array_get_string")
+                            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+                        let result = self.builder.build_call(
+                            get_fn,
+                            &[array_ptr.into(), index_value.into()],
+                            "array_get_string",
+                        )?;
+
+                        Ok(result
+                            .try_as_basic_value()
+                            .left()
+                            .ok_or_else(|| anyhow::anyhow!("Expected return value"))?)
+                    }
+                    _ => bail!("Cannot index non-array type: {:?}", array_type),
+                }
             }
 
             Expression::Identifier(name) => {
@@ -693,6 +947,22 @@ impl<'ctx> CodeGenerator<'ctx> {
                                 "print_float",
                             )?;
                         }
+                        Type::IntArray | Type::FloatArray | Type::StringArray | Type::BoolArray => {
+                            // 배열은 주소를 출력하거나 특별한 처리 필요
+                            let fmt = if is_last {
+                                self.builder
+                                    .build_global_string_ptr("[array@%p]\n", "array_fmt_nl")?
+                            } else {
+                                self.builder
+                                    .build_global_string_ptr("[array@%p] ", "array_fmt_sp")?
+                            };
+                            let val = self.compile_expression(arg)?;
+                            self.builder.build_call(
+                                printf_fn,
+                                &[fmt.as_pointer_value().into(), val.into()],
+                                "print_array_addr",
+                            )?;
+                        }
                     }
                 }
 
@@ -723,6 +993,202 @@ impl<'ctx> CodeGenerator<'ctx> {
         }
     }
 
+    fn compile_int_array(&mut self, elements: &[Expression]) -> Result<BasicValueEnum<'ctx>> {
+        let capacity = elements.len();
+        let size_type = self.get_size_type();
+
+        // TODO: 실제로는 전역 GC 인스턴스 사용
+        let gc_ptr = self
+            .context
+            .ptr_type(inkwell::AddressSpace::default())
+            .const_null();
+
+        let alloc_fn = self
+            .module
+            .get_function("naviary_allocate_int_array")
+            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+        let array_ptr = self.builder.build_call(
+            alloc_fn,
+            &[
+                gc_ptr.into(),
+                size_type.const_int(capacity as u64, false).into(),
+            ],
+            "new_int_array",
+        )?;
+
+        let array_ptr = array_ptr
+            .try_as_basic_value()
+            .left()
+            .ok_or_else(|| anyhow::anyhow!("Expected return value"))?;
+
+        // 각 요소 설정
+        let set_fn = self
+            .module
+            .get_function("naviary_array_set_int")
+            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+        for (index, element) in elements.iter().enumerate() {
+            let value = self.compile_expression(element)?;
+            let index_val = size_type.const_int(index as u64, false);
+
+            self.builder.build_call(
+                set_fn,
+                &[array_ptr.into(), index_val.into(), value.into()],
+                "array_set",
+            )?;
+        }
+
+        Ok(array_ptr)
+    }
+
+    fn compile_float_array(&mut self, elements: &[Expression]) -> Result<BasicValueEnum<'ctx>> {
+        let capacity = elements.len();
+        let size_type = self.get_size_type();
+
+        let gc_ptr = self
+            .context
+            .ptr_type(inkwell::AddressSpace::default())
+            .const_null();
+
+        let alloc_fn = self
+            .module
+            .get_function("naviary_allocate_float_array")
+            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+        let array_ptr = self.builder.build_call(
+            alloc_fn,
+            &[
+                gc_ptr.into(),
+                size_type.const_int(capacity as u64, false).into(),
+            ],
+            "new_float_array",
+        )?;
+
+        let array_ptr = array_ptr
+            .try_as_basic_value()
+            .left()
+            .ok_or_else(|| anyhow::anyhow!("Expected return value"))?;
+
+        let set_fn = self
+            .module
+            .get_function("naviary_array_set_float")
+            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+        for (index, element) in elements.iter().enumerate() {
+            let value = self.compile_expression(element)?;
+            let index_val = size_type.const_int(index as u64, false);
+
+            self.builder.build_call(
+                set_fn,
+                &[array_ptr.into(), index_val.into(), value.into()],
+                "array_set",
+            )?;
+        }
+
+        Ok(array_ptr)
+    }
+
+    fn compile_bool_array(&mut self, elements: &[Expression]) -> Result<BasicValueEnum<'ctx>> {
+        let capacity = elements.len();
+        let size_type = self.get_size_type();
+
+        // TODO: 실제로는 전역 GC 인스턴스 사용
+        let gc_ptr = self
+            .context
+            .ptr_type(inkwell::AddressSpace::default())
+            .const_null();
+
+        // Bool 배열 할당
+        let alloc_fn = self
+            .module
+            .get_function("naviary_allocate_bool_array")
+            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+        let array_ptr = self.builder.build_call(
+            alloc_fn,
+            &[
+                gc_ptr.into(),
+                size_type.const_int(capacity as u64, false).into(),
+            ],
+            "new_bool_array",
+        )?;
+
+        let array_ptr = array_ptr
+            .try_as_basic_value()
+            .left()
+            .ok_or_else(|| anyhow::anyhow!("Expected return value"))?;
+
+        // 각 요소 설정
+        let set_fn = self
+            .module
+            .get_function("naviary_array_set_bool")
+            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+        for (index, element) in elements.iter().enumerate() {
+            let value = self.compile_expression(element)?;
+            let index_val = size_type.const_int(index as u64, false);
+
+            self.builder.build_call(
+                set_fn,
+                &[array_ptr.into(), index_val.into(), value.into()],
+                "array_set",
+            )?;
+        }
+
+        Ok(array_ptr)
+    }
+
+    fn compile_string_array(&mut self, elements: &[Expression]) -> Result<BasicValueEnum<'ctx>> {
+        let capacity = elements.len();
+        let size_type = self.get_size_type();
+
+        let gc_ptr = self
+            .context
+            .ptr_type(inkwell::AddressSpace::default())
+            .const_null();
+
+        // String 배열 할당
+        let alloc_fn = self
+            .module
+            .get_function("naviary_allocate_string_array")
+            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+        let array_ptr = self.builder.build_call(
+            alloc_fn,
+            &[
+                gc_ptr.into(),
+                size_type.const_int(capacity as u64, false).into(),
+            ],
+            "new_string_array",
+        )?;
+
+        let array_ptr = array_ptr
+            .try_as_basic_value()
+            .left()
+            .ok_or_else(|| anyhow::anyhow!("Expected return value"))?;
+
+        // 각 문자열 요소 설정
+        let set_fn = self
+            .module
+            .get_function("naviary_array_set_string")
+            .ok_or_else(|| anyhow::anyhow!("Runtime function not found"))?;
+
+        for (index, element) in elements.iter().enumerate() {
+            // String expression을 컴파일하면 StringObject 포인터가 됨
+            let value = self.compile_expression(element)?;
+            let index_val = size_type.const_int(index as u64, false);
+
+            self.builder.build_call(
+                set_fn,
+                &[array_ptr.into(), index_val.into(), value.into()],
+                "array_set",
+            )?;
+        }
+
+        Ok(array_ptr)
+    }
+
     // LLVM IR을 파일로 저장
     pub fn write_to_file(&self, filename: &str) -> Result<()> {
         self.module
@@ -743,6 +1209,32 @@ impl<'ctx> CodeGenerator<'ctx> {
                     .ok_or_else(|| anyhow::anyhow!("Unknown variable: {}", name))?;
                 Ok(*ty)
             }
+
+            Expression::Array { elements } => {
+                if elements.is_empty() {
+                    bail!("Cannot infer type of empty array");
+                }
+                let elem_type = self.infer_expression_type(&elements[0])?;
+                match elem_type {
+                    Type::Int => Ok(Type::IntArray),
+                    Type::Float => Ok(Type::FloatArray),
+                    Type::String => Ok(Type::StringArray),
+                    Type::Bool => Ok(Type::BoolArray),
+                    _ => bail!("Unsupported array element type"),
+                }
+            }
+
+            Expression::Index { object, .. } => {
+                let object_type = self.infer_expression_type(object)?;
+                match object_type {
+                    Type::IntArray => Ok(Type::Int),
+                    Type::FloatArray => Ok(Type::Float),
+                    Type::StringArray => Ok(Type::String),
+                    Type::BoolArray => Ok(Type::Bool),
+                    _ => bail!("Cannot index non-array type: {:?}", object_type),
+                }
+            }
+
             Expression::Binary { left, op, .. } => {
                 match op {
                     BinaryOp::Equal

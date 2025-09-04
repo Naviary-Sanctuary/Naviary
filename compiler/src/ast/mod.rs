@@ -123,6 +123,15 @@ pub enum Expression {
         name: String,
         args: Vec<Expression>,
     },
+
+    Array {
+        elements: Vec<Expression>,
+    },
+
+    Index {
+        object: Box<Expression>,
+        index: Box<Expression>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

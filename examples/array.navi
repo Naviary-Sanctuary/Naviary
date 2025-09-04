@@ -1,0 +1,34 @@
+func main() {
+    // Int 배열 테스트
+    let numbers = [1, 2, 3, 4, 5];
+    let first = numbers[0];
+    let third = numbers[2];
+    print(first, third);
+    
+    // Float 배열 테스트
+    let floats = [1.5, 2.5, 3.5];
+    let second_float = floats[1];
+    print(second_float);
+    
+    // Bool 배열 테스트
+    let bools = [true, false, true];
+    let is_false = bools[1];
+    print(is_false);
+    
+    // String 배열 테스트
+    let strings = ["Hello", "World", "!"];
+    let greeting = strings[0];
+    let world = strings[1];
+    print(greeting, world);
+    
+    // 빈 배열 (타입 명시)
+    let empty: int[] = [];
+    print("Empty array created");
+    
+    // let empty2 = []; 빈 배열의 경우 타입을 명시하지 않으면 에러.
+    
+    // 계산된 인덱스
+    let index = 1 + 1;
+    let value = numbers[index];
+    print("Value at index 2:", value);
+}
