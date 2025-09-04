@@ -13,10 +13,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "Naviary-Runtime"
-version = "0.0.1"
-
-[[package]]
 name = "anyhow"
 version = "1.0.99"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -142,6 +138,10 @@ checksum = "605d9697bcd5ef3a42d38efc51541aa3d6a4a25f7ab6d1ed0da5ac632a26b470"
 dependencies = [
  "logos-codegen",
 ]
+
+[[package]]
+name = "naviary-runtime"
+version = "0.0.1"
 
 [[package]]
 name = "once_cell"

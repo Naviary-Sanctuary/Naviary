@@ -542,7 +542,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     fn compile_expression(&mut self, expr: &Expression) -> Result<BasicValueEnum<'ctx>> {
         match expr {
             Expression::Number(n) => {
-                let val = self.context.i32_type().const_int(*n as u64, false);
+                let val = self.get_native_int_type().const_int(*n as u64, false);
                 Ok(val.into())
             }
 
@@ -579,16 +579,27 @@ impl<'ctx> CodeGenerator<'ctx> {
             }
 
             Expression::Index { object, index } => {
-                // 인덱스 값 먼저 컴파일
+                // 인덱스 값 컴파일
                 let index_value = self.compile_expression(index)?;
 
-                // 객체의 타입 확인
-                let array_type = self.infer_expression_type(object)?;
+                // 인덱스를 size_type으로 변환
+                let size_type = self.get_size_type();
+                let index_converted = if index_value.is_int_value() {
+                    let int_val = index_value.into_int_value();
+                    if int_val.get_type().get_bit_width() < size_type.get_bit_width() {
+                        self.builder
+                            .build_int_s_extend(int_val, size_type, "index_extended")?
+                            .into()
+                    } else {
+                        index_value
+                    }
+                } else {
+                    index_value
+                };
 
-                // 배열 포인터 가져오기
+                let array_type = self.infer_expression_type(object)?;
                 let array_ptr = self.compile_expression(object)?;
 
-                // 타입별 요소 접근
                 match array_type {
                     Type::IntArray => {
                         let get_fn = self
@@ -598,7 +609,7 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                         let result = self.builder.build_call(
                             get_fn,
-                            &[array_ptr.into(), index_value.into()],
+                            &[array_ptr.into(), index_converted.into()], // 변환된 인덱스
                             "array_get_int",
                         )?;
 
@@ -615,7 +626,7 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                         let result = self.builder.build_call(
                             get_fn,
-                            &[array_ptr.into(), index_value.into()],
+                            &[array_ptr.into(), index_converted.into()], // 변환된 인덱스
                             "array_get_float",
                         )?;
 
@@ -632,7 +643,7 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                         let result = self.builder.build_call(
                             get_fn,
-                            &[array_ptr.into(), index_value.into()],
+                            &[array_ptr.into(), index_converted.into()], // 변환된 인덱스
                             "array_get_bool",
                         )?;
 
@@ -649,7 +660,7 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                         let result = self.builder.build_call(
                             get_fn,
-                            &[array_ptr.into(), index_value.into()],
+                            &[array_ptr.into(), index_converted.into()], // 변환된 인덱스
                             "array_get_string",
                         )?;
 
@@ -884,10 +895,25 @@ impl<'ctx> CodeGenerator<'ctx> {
                     match arg_type {
                         Type::Int => {
                             let fmt = if is_last {
-                                self.builder.build_global_string_ptr("%d\n", "int_fmt_nl")?
+                                #[cfg(target_pointer_width = "64")]
+                                let fmt_str = self
+                                    .builder
+                                    .build_global_string_ptr("%lld\n", "int_fmt_nl")?;
+                                #[cfg(target_pointer_width = "32")]
+                                let fmt_str =
+                                    self.builder.build_global_string_ptr("%d\n", "int_fmt_nl")?;
+                                fmt_str
                             } else {
-                                self.builder.build_global_string_ptr("%d ", "int_fmt_sp")?
+                                #[cfg(target_pointer_width = "64")]
+                                let fmt_str = self
+                                    .builder
+                                    .build_global_string_ptr("%lld ", "int_fmt_sp")?;
+                                #[cfg(target_pointer_width = "32")]
+                                let fmt_str =
+                                    self.builder.build_global_string_ptr("%d ", "int_fmt_sp")?;
+                                fmt_str
                             };
+
                             let val = self.compile_expression(arg)?;
                             self.builder.build_call(
                                 printf_fn,
@@ -1030,11 +1056,27 @@ impl<'ctx> CodeGenerator<'ctx> {
 
         for (index, element) in elements.iter().enumerate() {
             let value = self.compile_expression(element)?;
+
+            // value도 native_int_type으로 변환 필요
+            let native_int_type = self.get_native_int_type();
+            let value_converted = if value.is_int_value() {
+                let int_val = value.into_int_value();
+                if int_val.get_type().get_bit_width() < native_int_type.get_bit_width() {
+                    self.builder
+                        .build_int_s_extend(int_val, native_int_type, "value_extended")?
+                        .into()
+                } else {
+                    value
+                }
+            } else {
+                value
+            };
+
             let index_val = size_type.const_int(index as u64, false);
 
             self.builder.build_call(
                 set_fn,
-                &[array_ptr.into(), index_val.into(), value.into()],
+                &[array_ptr.into(), index_val.into(), value_converted.into()],
                 "array_set",
             )?;
         }

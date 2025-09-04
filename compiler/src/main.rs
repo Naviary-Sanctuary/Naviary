@@ -113,8 +113,23 @@ fn compile_and_run() -> Result<(), String> {
 
     // 링킹
     println!("Linking...");
+    let runtime_lib = "./target/release/libnaviary_runtime.a";
+
+    // 파일 존재 확인
+    if !Path::new(runtime_lib).exists() {
+        return Err(format!(
+            "Runtime library not found at: {}\nPlease build runtime first: cd runtime && cargo build --release",
+            runtime_lib
+        ));
+    }
+
     let output = Command::new("clang")
-        .args(&["output.o", "runtime.o", "-o", "program"])
+        .args(&[
+            "output.o",
+            runtime_lib, // 올바른 경로!
+            "-o",
+            "program",
+        ])
         .output()
         .map_err(|e| format!("Failed to link: {}", e))?;
 
@@ -124,9 +139,6 @@ fn compile_and_run() -> Result<(), String> {
             String::from_utf8_lossy(&output.stderr)
         ));
     }
-
-    println!("{}", "✓ Executable created: ./program".green());
-
     // 실행
     println!("\n{}", "=== Running Program ===".magenta().bold());
     let output = Command::new("./program")

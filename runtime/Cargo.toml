@@ -1,9 +1,10 @@
 [package]
-name = "Naviary-Runtime"
+name = "naviary-runtime"
 version = "0.0.1"
 edition = "2024"
 
 [lib]
 name = "naviary_runtime"
+crate-type = ["staticlib"] 
 
 [dependencies]
