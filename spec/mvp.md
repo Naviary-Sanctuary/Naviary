@@ -4,12 +4,15 @@
 
 ### Core Decisions
 
-- **Compiler Language**: Rust
-- **Backend**: LLVM (with monomorphization for generics)
-- **Memory Management**: Pure GC
-- **GC Strategy**: Generational FIRST → Concurrent later
-- **Type Inference**: Bidirectional + HM (rank-1)
+- **Compiler Language**: **Go**
+- **Backend**: **Direct Assembly emission** (MVP: **x86‑64 SysV / AT\&T(GAS)**; future: AArch64, Windows x64). _Generics are monomorphized._
+- **Runtime/GC Implementation**: **C++20/23 (exceptions/RTTI disabled)**, exposing only **C ABI** (`extern "C"`).
+- **Memory Management**: GC-based (initially STW mark‑sweep → later generational → later concurrent)
+- **GC Strategy**: **Generational first**, followed by **Concurrent (SATB) old‑gen**
+- **Type Inference**: Bidirectional + HM (rank‑1)
 - **OOP Model**: Single inheritance + nominal interfaces
+
+> Note: Backend is ASM, so stack maps and debug info are emitted directly in **DWARF (.file/.loc, .cfi\_\*)**.
 
 ## Roadmap
 
@@ -38,23 +41,23 @@
 
 #### Code Generation
 
-- LLVM IR generation
-- Basic operations compilation
-- Function calling convention
-- Main function entry point
-- **Precise stack maps from day one** (for future GC)
+- **Direct assembly emission** (x86‑64 SysV, AT\&T/GAS)
+- Prologue/epilogue, calling convention, 16B stack alignment
+- IR → ASM mapping for `add/cmp/br/call/ret/load/store`
+- **DWARF** line/unwind info (`.file/.loc`, `.cfi_*`)
+- **Precise stack maps from day one** (foundation for future GC)
 
-#### Runtime
+#### Runtime (C++)
 
-- Stop-the-world mark & sweep GC
-- Single-thread bump allocator
-- Print function (stdout)
-- **Object header design locked in**
+- Implemented in **C++ (exceptions/RTTI disabled)**, exposing **C ABI** functions (`rt_*`)
+- Initial GC: **Stop‑the‑world mark & sweep**, single-thread bump/arena allocator
+- Basic I/O: `rt_print*` (stdout)
+- **Object header format locked in**
 
 #### Goals
 
-- Compile 1-10K LOC samples
-- ASAN/UBSAN clean
+- Compile 1‑10K LOC samples
+- ASAN/UBSAN clean builds
 - Root maps validated
 
 ### 0.0.2 - Language Expansion + Infrastructure
@@ -86,23 +89,23 @@
 #### Testing Infrastructure
 
 - Golden tests for parser/typing
-- IR diff tests
+- **ASM output diff tests** (IR→ASM snapshot)
 - Runtime property tests
 
 #### Goals
 
 - 100+ compiler tests
-- Stable IR baselines
+- Stable ASM baselines
 
 ### 0.0.3 - Generational GC (Big Win!)
 
 #### Young Generation GC
 
 - Copying collector for young gen
-- TLAB (Thread-Local Allocation Buffer)
+- TLAB (Thread‑Local Allocation Buffer)
 - Survivor spaces & promotion rules
 - **Card table** (512B cards)
-- Precise minor root scanning
+- Precise minor root scanning (stack maps & object maps)
 
 #### Basic Optimizations
 
@@ -114,8 +117,8 @@
 
 - Minor GC avg < 1ms
 - Minor GC P95 < 3ms
-- Promotion rate < 10% on alloc-heavy benchmarks
-- Single-threaded performance baseline
+- Promotion rate < 10% on alloc‑heavy benchmarks
+- Single‑threaded performance baseline
 
 ### 0.0.4 - Polymorphism + Generics
 
@@ -133,7 +136,7 @@
 - Generic functions (monomorphization)
 - Generic classes
 - Type constraints (`where` clauses)
-- **No ad-hoc overloading** (keep inference simple)
+- **No ad‑hoc overloading** (keep inference simple)
 
 #### Type System Rules
 
@@ -144,9 +147,9 @@
 #### Goals
 
 - Dynamic dispatch overhead documented
-- Code size vs performance trade-offs clear
+- Code size vs performance trade‑offs clear
 
-### 0.0.5 - Concurrency + Old-gen Concurrent GC + Modules
+### 0.0.5 - Concurrency + Old‑gen Concurrent GC + Modules
 
 #### Language Features
 
@@ -154,9 +157,9 @@
 - Memory model documentation
 - Basic synchronization primitives
 
-#### Old Generation Concurrent GC
+#### Old Generation Concurrent GC (C++)
 
-- SATB (Snapshot-At-The-Beginning) marking
+- SATB (Snapshot‑At‑The‑Beginning) marking
 - Concurrent marking for old gen
 - Background sweep
 - Full write barrier
@@ -187,7 +190,7 @@
 ### Object Layout
 
 - Fixed object header format
-- ABI-stable `this` layout
+- ABI‑stable `this` layout
 - Vtable slot ordering frozen
 
 ### Type System
@@ -198,9 +201,9 @@
 
 ### GC Integration
 
-- Precise stack maps from day 1
+- **Precise stack maps from day 1**
 - Card size: 512B
-- SATB write barrier for concurrent GC
+- SATB write barrier for concurrent GC (0.0.5)
 
 ## Benchmarking Targets
 
