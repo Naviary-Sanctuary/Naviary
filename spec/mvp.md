@@ -4,6 +4,7 @@
 
 ### Core Decisions
 
+- **Source Code Extension**: .navi
 - **Compiler Language**: **Go**
 - **Backend**: **Direct Assembly emission** (MVP: **x86‑64 SysV / AT\&T(GAS)**; future: AArch64, Windows x64). _Generics are monomorphized._
 - **Runtime/GC Implementation**: **C++20/23 (exceptions/RTTI disabled)**, exposing only **C ABI** (`extern "C"`).
