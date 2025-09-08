@@ -39,16 +39,18 @@ const (
 
 	operatorBegin
 	// Operators
-	PLUS         // +
-	MINUS        // -
-	ASTERISK     // *
-	SLASH        // /
-	ASSIGN       // =
-	COLON_ASSIGN // :=
-	EQUAL        // ==
-	NOT_EQUAL    // !=
-	GREATER_THAN // >
-	LESS_THAN    // <
+	PLUS               // +
+	MINUS              // -
+	ASTERISK           // *
+	SLASH              // /
+	ASSIGN             // =
+	COLON_ASSIGN       // :=
+	EQUAL              // ==
+	NOT_EQUAL          // !=
+	GREATER_THAN       // >
+	LESS_THAN          // <
+	GREATER_THAN_EQUAL // >=
+	LESS_THAN_EQUAL    // <=
 
 	// Compound Assignment Operators
 	PLUS_ASSIGN     // +=
