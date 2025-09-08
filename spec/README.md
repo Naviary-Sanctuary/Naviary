@@ -159,6 +159,10 @@ let name = "Alice"
 let mut counter = 0
 counter += 1
 
+// Mutable alias
+let counter := 0
+counter += 1
+
 // Compile-time constants
 const MAX_SIZE = 1000
 const VERSION = "1.0.0"
