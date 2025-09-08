@@ -4,3 +4,9 @@
 **/program
 **/runtime.o
 **/.DS_Store
+
+# runtime
+**/io.o
+**/libnavi_runtime.a
+**/test_program
+**/test.o

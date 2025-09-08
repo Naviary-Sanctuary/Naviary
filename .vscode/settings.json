@@ -2,5 +2,8 @@
 {
   "files.associations": {
       "*.navi": "naviary"
-  }
+  },
+  "[makefile]": {
+    "editor.insertSpaces": false  // Makefile은 탭 사용
+}
 }
