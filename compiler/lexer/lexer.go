@@ -1,7 +1,7 @@
 package lexer
 
 import (
-	"fmt"
+	"naviary/compiler/errors"
 	"naviary/compiler/token"
 )
 
@@ -12,10 +12,11 @@ type Lexer struct {
 	char    byte
 	line    int
 	column  int
+	errors  *errors.ErrorCollector
 }
 
-func New(input string) *Lexer {
-	lexer := &Lexer{input: input, line: 1, column: 0}
+func New(input, filename string) *Lexer {
+	lexer := &Lexer{input: input, line: 1, column: 0, errors: errors.New(input, filename)}
 	lexer.advance()
 	return lexer
 }
@@ -84,41 +85,96 @@ func (lexer *Lexer) readIdentifier() string {
 	result := lexer.input[start:lexer.current]
 	return result
 }
+
 func (lexer *Lexer) readNumber() string {
 	var result []byte
 
+	// Read integer part
 	for isDigit(lexer.char) || lexer.char == '_' {
-		if lexer.char != '_' {
-			result = append(result, lexer.char)
-		} else {
-			// start with underscore
-			if len(result) == 0 {
+		if lexer.char == '_' {
+			nextChar := lexer.peek()
+
+			// Error: consecutive underscores
+			if nextChar == '_' {
+				lexer.errors.Add(
+					errors.LexicalError,
+					lexer.line,
+					lexer.column,
+					2,
+					"consecutive underscores in number literal",
+				)
+				lexer.advance()
+				continue
+			}
+
+			// Error: trailing underscore (not followed by digit or dot)
+			if !isDigit(nextChar) && nextChar != '.' {
+				lexer.errors.Add(
+					errors.LexicalError,
+					lexer.line,
+					lexer.column,
+					1,
+					"number cannot end with underscore",
+				)
+				lexer.advance()
 				break
 			}
 
-			if !isDigit(lexer.peek()) && lexer.peek() != '.' {
-				lexer.advance()
-				return string(result)
-			}
-		}
+			// Valid underscore - skip it
+			lexer.advance()
 
-		lexer.advance()
+		} else {
+			// Normal digit - add to result
+			result = append(result, lexer.char)
+			lexer.advance()
+		}
 	}
 
+	// Check for decimal point (float)
 	if lexer.char == '.' && isDigit(lexer.peek()) {
+		// Add the dot
 		result = append(result, '.')
 		lexer.advance()
 
+		// Read fractional part
 		for isDigit(lexer.char) || lexer.char == '_' {
-			if lexer.char != '_' {
-				result = append(result, lexer.char)
-			} else {
-				if !isDigit(lexer.peek()) {
+			if lexer.char == '_' {
+				nextChar := lexer.peek()
+
+				// Error: consecutive underscores in fractional part
+				if nextChar == '_' {
+					lexer.errors.Add(
+						errors.LexicalError,
+						lexer.line,
+						lexer.column,
+						2,
+						"consecutive underscores in number literal",
+					)
 					lexer.advance()
-					return string(result)
+					continue
 				}
+
+				// Error: trailing underscore in fractional part
+				if !isDigit(nextChar) {
+					lexer.errors.Add(
+						errors.LexicalError,
+						lexer.line,
+						lexer.column,
+						1,
+						"number cannot end with underscore",
+					)
+					lexer.advance()
+					break
+				}
+
+				// Valid underscore - skip it
+				lexer.advance()
+
+			} else {
+				// Normal digit in fractional part
+				result = append(result, lexer.char)
+				lexer.advance()
 			}
-			lexer.advance()
 		}
 	}
 
@@ -126,13 +182,16 @@ func (lexer *Lexer) readNumber() string {
 }
 
 func (lexer *Lexer) readString() string {
+	// Skip opening quote
 	lexer.advance()
 
 	start := lexer.current
+	startLine := lexer.line
+	startColumn := lexer.column - 1 // -1 for the opening quote
 
 	for {
 		if lexer.char == '"' {
-			// Found closing quote
+			// Found closing quote - success
 			result := lexer.input[start:lexer.current]
 			lexer.advance() // consume closing quote
 			return result
@@ -141,13 +200,62 @@ func (lexer *Lexer) readString() string {
 		if lexer.char == '\\' {
 			// Handle escape sequences
 			lexer.advance() // consume backslash
-			if lexer.char != 0 {
-				lexer.advance() // consume escaped character
+
+			if lexer.char == 0 {
+				// EOF after backslash
+				lexer.errors.Add(
+					errors.LexicalError,
+					startLine,
+					startColumn,
+					lexer.current-start+1,
+					"unterminated string literal",
+				)
+				return lexer.input[start:lexer.current]
 			}
+
+			// Check for valid escape sequences
+			switch lexer.char {
+			case 'n', 't', 'r', '\\', '"':
+				// Valid escape sequences
+				lexer.advance()
+			default:
+				// Invalid escape sequence
+				lexer.errors.Add(
+					errors.LexicalError,
+					lexer.line,
+					lexer.column-1, // -1 for backslash position
+					2,              // backslash + character
+					"invalid escape sequence '\\%c'",
+					lexer.char,
+				)
+				lexer.advance()
+			}
+
 		} else if lexer.char == 0 {
-			// Unterminated string (EOF reached)
+			// EOF without closing quote
+			lexer.errors.Add(
+				errors.LexicalError,
+				startLine,
+				startColumn,
+				lexer.current-start+1,
+				"unterminated string literal",
+			)
 			return lexer.input[start:lexer.current]
+
+		} else if lexer.char == '\n' {
+			// Newline in string (not allowed in Naviary)
+			lexer.errors.Add(
+				errors.LexicalError,
+				lexer.line,
+				lexer.column,
+				1,
+				"unexpected newline in string literal",
+			)
+			// Continue reading to find more errors
+			lexer.advance()
+
 		} else {
+			// Normal character
 			lexer.advance()
 		}
 	}
@@ -373,6 +481,8 @@ func (lexer *Lexer) NextToken() token.Token {
 
 		} else {
 			// Unknown character
+			lexer.errors.Add(errors.LexicalError, lexer.line, lexer.column, 1, "unknown character: %s", string(lexer.char))
+
 			t = lexer.newToken(token.ILLEGAL, lexer.char)
 			lexer.advance()
 		}

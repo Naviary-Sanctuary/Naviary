@@ -22,7 +22,7 @@ counter := 0
 counter += 1
 `
 
-		lexer := New(input)
+		lexer := New(input, "test.navi")
 
 		expectedTokens := []token.Token{
 			{Type: token.LET, Literal: "let", Line: 1, Column: 1},
