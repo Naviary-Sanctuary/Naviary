@@ -21,6 +21,10 @@ func New(input, filename string) *Lexer {
 	return lexer
 }
 
+func (lexer *Lexer) Errors() *errors.ErrorCollector {
+	return lexer.errors
+}
+
 // Advance the lexer to the next character
 func (lexer *Lexer) advance() {
 	// Move to next position
