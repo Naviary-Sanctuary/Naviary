@@ -22,8 +22,14 @@ High developer productivity, stable, powerful, and syntactically elegant languag
 ### Numeric Types
 
 ```
-int     // Platform default (32-bit: int32, 64-bit: int64)
-float   // Platform default (32-bit: float32, 64-bit: float64)
+// integer types
+i8, i16, i32, i64
+// float types
+f32, f64
+
+// aliases (convenience)
+int     // alias decided by build target (i64 on 64-bit targets; i32 on 32-bit)
+float   // alias to f64
 
 // Literals
 let a = 42          // int
@@ -164,7 +170,13 @@ let mut score: float = 0.0
 
 ### Default
 
-naviary has no default value assignment.
+naviary has no default value assignment if there is no optional operator.
+
+```naviary
+let x:string? // x == nil
+let x:string; // Compile Error
+let mut x:string; // Compile error if you don't allocate it later.naviary has no default value assignment.
+```
 
 ```naviary
 let x:string; // Compile Error
@@ -850,33 +862,13 @@ func transaction() {
 
 ### Concurrency
 
+All functions in Naviary are declared synchronous. Concurrency is a call-site choice.  
+The language introduces a single keyword `async` (call-site only) and a standard library type `Task<T>`.  
+**No implicit awaits** are allowed — blocking occurs only when the developer explicitly calls `await()` on a `Task`.
+
 ```naviary
-// spawn - lightweight thread
-spawn {
-    // Immutable variables can be freely referenced
-    // Mutable variables cannot be captured
-    // GC manages memory
-}
-
-// Sharing mutable state
-// 1. Mutex
-let data = Mutex::new(value)
-spawn { data.lock().modify() }
-
-// 2. Atomic
-let counter = Atomic::new(0)
-spawn { counter.add(1) }
-
-// 3. Channel
-let ch = channel<Data>()
-spawn { ch <- processData() }
-
-// Compile error example
-let mut x = 10
-spawn {
-    x += 1  // ❌ ERROR: "Cannot capture mutable variable.
-            //          Use Mutex, Atomic, or channels for shared state"
-}
+let t = async fetch(3) // act like goroutine
+let u2 = t.await()
 ```
 
 ### Pipeline Operator

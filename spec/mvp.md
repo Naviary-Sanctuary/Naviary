@@ -6,7 +6,7 @@
 
 - **Source Code Extension**: .navi
 - **Compiler Language**: **Go**
-- **Backend**: **Direct Assembly emission** (MVP: **x86‑64 SysV / AT\&T(GAS)**; future: AArch64, Windows x64). _Generics are monomorphized._
+- **Backend**: **Direct Assembly emission** _Generics are monomorphized._
 - **Runtime/GC Implementation**: **C++20/23 (exceptions/RTTI disabled)**, exposing only **C ABI** (`extern "C"`).
 - **Memory Management**: GC-based (initially STW mark‑sweep → later generational → later concurrent)
 - **GC Strategy**: **Generational first**, followed by **Concurrent (SATB) old‑gen**
@@ -42,7 +42,7 @@
 
 #### Code Generation
 
-- **Direct assembly emission** (x86‑64 SysV, AT\&T/GAS)
+- **Direct assembly emission** (ARM64)
 - Prologue/epilogue, calling convention, 16B stack alignment
 - IR → ASM mapping for `add/cmp/br/call/ret/load/store`
 - **DWARF** line/unwind info (`.file/.loc`, `.cfi_*`)
@@ -92,6 +92,10 @@
 - Golden tests for parser/typing
 - **ASM output diff tests** (IR→ASM snapshot)
 - Runtime property tests
+
+#### x86-64 support (cross compile)
+
+- add x86-64 assembly
 
 #### Goals
 
