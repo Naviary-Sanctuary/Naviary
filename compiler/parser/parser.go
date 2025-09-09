@@ -41,6 +41,12 @@ func (parser *Parser) isPeekToken(tokenType token.TokenType) bool {
 	return parser.peekToken.Type == tokenType
 }
 
+func (parser *Parser) isStatementEnd() bool {
+	return parser.isCurrentToken(token.SEMICOLON) ||
+		parser.isCurrentToken(token.NEWLINE) ||
+		parser.isCurrentToken(token.EOF)
+}
+
 func (parser *Parser) expect(tokenType token.TokenType) bool {
 	if parser.isCurrentToken(tokenType) {
 		return true
@@ -159,9 +165,8 @@ func (parser *Parser) parseLetStatement() ast.Statement {
 		return nil
 	}
 
-	parser.advance()
-
-	value := parser.parseExpression()
+	parser.advance() // consume the assignment operator
+	value := parser.parseExpression(LOWEST)
 
 	statement := &ast.LetStatement{
 		Token:   letToken,
@@ -177,13 +182,49 @@ func (parser *Parser) parseLetStatement() ast.Statement {
 	return statement
 }
 
-// parseExpression is the main entry for expression parsing
-func (parser *Parser) parseExpression() ast.Expression {
-	return parser.parsePrimary()
+func (parser *Parser) parseExpression(precedence int) ast.Expression {
+	// Handle prefix expressions (literals, identifiers, etc.)
+	left := parser.parseAtom()
+	if left == nil {
+		return nil
+	}
+
+	for !parser.isStatementEnd() &&
+		precedence < getPrecedence(parser.peekToken.Type) {
+
+		if !parser.peekToken.Type.IsOperator() {
+			break
+		}
+
+		operatorToken := parser.peekToken
+		parser.advance() // consume the operator
+		parser.advance() // move to the next expression
+
+		right := parser.parseExpression(parser.getRightPrecedence(operatorToken.Type, getPrecedence(operatorToken.Type)))
+		if right == nil {
+			return nil
+		}
+
+		left = &ast.BinaryExpression{
+			Token:    operatorToken,
+			Left:     left,
+			Operator: operatorToken.Literal,
+			Right:    right,
+		}
+	}
+
+	return left
 }
 
-// parsePrimary handles literals and identifiers
-func (parser *Parser) parsePrimary() ast.Expression {
+func (parser *Parser) getRightPrecedence(operator token.TokenType, precedence int) int {
+	if isRightAssociative(operator) {
+		return precedence - 1
+	}
+	return precedence
+}
+
+// parseAtom handles literals and identifiers
+func (parser *Parser) parseAtom() ast.Expression {
 	switch parser.currentToken.Type {
 	case token.INT:
 		return parser.parseIntegerLiteral()

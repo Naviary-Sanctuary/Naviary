@@ -3,28 +3,28 @@ package parser
 import "naviary/compiler/token"
 
 const (
-	Grouping    = iota // 0: (), [], ., ?., ::
-	UNARY              // 1: !, ~, -, + (prefix)
-	EXPONENT           // 2: **
-	PRODUCT            // 3: *, /, %
-	SUM                // 4: +, -
-	SHIFT              // 5: <<, >>, >>>
-	RANGE              // 6: .., ..=
-	COMPARISON         // 7: <, >, <=, >=
-	EQUALITY           // 8: ==, !=
+	LOWEST      = iota // 0: 가장 낮은 우선순위
+	ASSIGNMENT         // 1: =, +=, -=, *=, /=
+	PIPELINE           // 2: |>
+	NILCOALESCE        // 3: ??
+	LOGICAL_OR         // 4: ||
+	LOGICAL_AND        // 5: &&
+	TYPE_OP            // 6: is, as
+	BITWISE_OR         // 7: |
+	BITWISE_XOR        // 8: ^
 	BITWISE_AND        // 9: &
-	BITWISE_XOR        // 10: ^
-	BITWISE_OR         // 11: |
-	TYPE_OP            // 12: is, as
-	LOGICAL_AND        // 13: &&
-	LOGICAL_OR         // 14: ||
-	NILCOALESCE        // 15: ??
-	PIPELINE           // 16: |>
-	ASSIGNMENT         // 17: =, +=, -=, *=, /=
-	LOWEST
+	EQUALITY           // 10: ==, !=
+	COMPARISON         // 11: <, >, <=, >=
+	RANGE              // 12: .., ..=
+	SHIFT              // 13: <<, >>, >>>
+	SUM                // 14: +, -
+	PRODUCT            // 15: *, /, %
+	EXPONENT           // 16: **
+	UNARY              // 17: !, ~, -, + (prefix)
+	Grouping           // 18: (), [], ., ?., :: (가장 높은 우선순위)
 )
 
-var procedenceMap = map[token.TokenType]int{
+var precedenceMap = map[token.TokenType]int{
 	// Arithmetic operators
 	token.ASTERISK: PRODUCT,
 	token.SLASH:    PRODUCT,
@@ -52,10 +52,25 @@ var procedenceMap = map[token.TokenType]int{
 }
 
 func getPrecedence(tokenType token.TokenType) int {
-	if precedence, ok := procedenceMap[tokenType]; ok {
+	if precedence, ok := precedenceMap[tokenType]; ok {
 		return precedence
 	}
 
 	// For all non-operator token
 	return LOWEST
+}
+
+func isRightAssociative(tokenType token.TokenType) bool {
+	switch tokenType {
+	case token.ASSIGN, // =
+		token.COLON_ASSIGN,    // :=
+		token.PLUS_ASSIGN,     // +=
+		token.MINUS_ASSIGN,    // -=
+		token.ASTERISK_ASSIGN, // *=
+		token.SLASH_ASSIGN:    // /=
+		return true
+	// TODO: EXPONENT (**)
+	default:
+		return false
+	}
 }

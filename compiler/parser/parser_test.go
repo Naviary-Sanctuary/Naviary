@@ -262,3 +262,71 @@ func TestStatementTerminators(t *testing.T) {
 		})
 	}
 }
+
+func TestParseInfixExpressions(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string // Expected string representation of AST
+	}{
+		{
+			name:     "simple addition",
+			input:    "let x = 5 + 3",
+			expected: "let x = (5 + 3)",
+		},
+		{
+			name:     "simple multiplication",
+			input:    "let x = 5 * 3",
+			expected: "let x = (5 * 3)",
+		},
+		{
+			name:     "operator precedence - multiply first",
+			input:    "let x = 2 + 3 * 4",
+			expected: "let x = (2 + (3 * 4))",
+		},
+		{
+			name:     "operator precedence - multiply first reversed",
+			input:    "let x = 2 * 3 + 4",
+			expected: "let x = ((2 * 3) + 4)",
+		},
+		{
+			name:     "left associativity - subtraction",
+			input:    "let x = 5 - 3 - 1",
+			expected: "let x = ((5 - 3) - 1)",
+		},
+		{
+			name:     "left associativity - division",
+			input:    "let x = 20 / 4 / 2",
+			expected: "let x = ((20 / 4) / 2)",
+		},
+		{
+			name:     "complex expression",
+			input:    "let x = 1 + 2 * 3 - 4 / 2",
+			expected: "let x = ((1 + (2 * 3)) - (4 / 2))",
+		},
+		{
+			name:     "all same precedence",
+			input:    "let x = 1 + 2 + 3 + 4",
+			expected: "let x = (((1 + 2) + 3) + 4)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lex := lexer.New(tt.input, "test.navi")
+			parser := New(lex)
+			program := parser.ParseProgram()
+
+			// Check for errors
+			assert.False(t, lex.Errors().HasErrors(),
+				"parser errors: %v", lex.Errors())
+
+			// Check we have one statement
+			require.Len(t, program.Statements, 1)
+
+			// Check the string representation matches expected
+			stmt := program.Statements[0]
+			assert.Equal(t, tt.expected, stmt.String())
+		})
+	}
+}
