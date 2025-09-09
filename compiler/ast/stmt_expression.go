@@ -1,14 +1,13 @@
-package statements
+package ast
 
 import (
-	ast "naviary/compiler/ast"
 	token "naviary/compiler/token"
 )
 
 // Example: print(42), x + 5
 type ExpressionStatement struct {
 	Token      token.Token
-	Expression ast.Expression
+	Expression Expression
 }
 
 func (expression *ExpressionStatement) statementNode() {}

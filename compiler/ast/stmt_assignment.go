@@ -1,16 +1,14 @@
-package statements
+package ast
 
 import (
 	"bytes"
-	ast "naviary/compiler/ast"
-	"naviary/compiler/ast/expressions"
 	token "naviary/compiler/token"
 )
 
 type AssignmentStatement struct {
 	Token    token.Token
-	Name     *expressions.Identifier
-	Value    ast.Expression
+	Name     *Identifier
+	Value    Expression
 	Operator string
 }
 

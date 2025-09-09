@@ -1,4 +1,4 @@
-package expressions
+package ast
 
 import "naviary/compiler/token"
 

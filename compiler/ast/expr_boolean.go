@@ -1,11 +1,11 @@
-package expressions
+package ast
 
 import "naviary/compiler/token"
 
 // Example: true, false
 type BooleanLiteral struct {
 	Token token.Token
-	value bool
+	Value bool
 }
 
 func (boolean *BooleanLiteral) expressionNode() {}

@@ -1,14 +1,13 @@
-package statements
+package ast
 
 import (
 	"bytes"
-	ast "naviary/compiler/ast"
 	token "naviary/compiler/token"
 )
 
 type ReturnStatement struct {
 	Token       token.Token
-	ReturnValue ast.Expression
+	ReturnValue Expression
 }
 
 func (r *ReturnStatement) statementNode() {}

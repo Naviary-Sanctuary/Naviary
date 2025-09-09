@@ -1,4 +1,4 @@
-package expressions
+package ast
 
 import "naviary/compiler/token"
 
@@ -6,7 +6,7 @@ import "naviary/compiler/token"
 // Example: 42, 100, 1_000_000
 type IntegerLiteral struct {
 	Token token.Token
-	value string
+	Value string
 }
 
 func (integer *IntegerLiteral) expressionNode() {}
@@ -16,5 +16,5 @@ func (integer *IntegerLiteral) TokenLiteral() string {
 }
 
 func (integer *IntegerLiteral) String() string {
-	return integer.value
+	return integer.Value
 }
