@@ -360,9 +360,6 @@ func greet(x: { name: string }) -> string {
 |>  // Pipeline: value |> func
 =>  // Arrow function: x => x * 2
 
-// Channel
-<-  // Channel send/receive: ch <- value, value = <-ch
-
 // Pattern matching
 _   // Wildcard: match x { _ => "default" }
 
@@ -391,7 +388,6 @@ _   // Wildcard: match x { _ => "default" }
 16. ??                          // Nil-coalescing
 17. |>                          // Pipeline
 18. =  +=  -=  *=  etc.         // Assignment
-19. <-                          // Channel
 
 // Examples
 a + b * c    // (a + (b * c))
