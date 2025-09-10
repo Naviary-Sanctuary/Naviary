@@ -49,6 +49,9 @@ var precedenceMap = map[token.TokenType]int{
 	token.MINUS_ASSIGN:    ASSIGNMENT,
 	token.ASTERISK_ASSIGN: ASSIGNMENT,
 	token.SLASH_ASSIGN:    ASSIGNMENT,
+
+	// Function call
+	token.LEFT_PAREN: Grouping,
 }
 
 func getPrecedence(tokenType token.TokenType) int {

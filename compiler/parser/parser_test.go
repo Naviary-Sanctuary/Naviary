@@ -452,3 +452,153 @@ func TestParseFunctionStatements(t *testing.T) {
 		})
 	}
 }
+
+func TestParseFunctionCalls(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected struct {
+			functionName   string
+			argumentCount  int
+			argumentValues []string // String representation of arguments
+		}
+	}{
+		{
+			name:  "function call without arguments",
+			input: "let x = getValue()",
+			expected: struct {
+				functionName   string
+				argumentCount  int
+				argumentValues []string
+			}{
+				functionName:   "getValue",
+				argumentCount:  0,
+				argumentValues: []string{},
+			},
+		},
+		{
+			name:  "function call with single argument",
+			input: "let x = print(42)",
+			expected: struct {
+				functionName   string
+				argumentCount  int
+				argumentValues []string
+			}{
+				functionName:   "print",
+				argumentCount:  1,
+				argumentValues: []string{"42"},
+			},
+		},
+		{
+			name:  "function call with multiple arguments",
+			input: "let result = add(10, 20)",
+			expected: struct {
+				functionName   string
+				argumentCount  int
+				argumentValues []string
+			}{
+				functionName:   "add",
+				argumentCount:  2,
+				argumentValues: []string{"10", "20"},
+			},
+		},
+		{
+			name:  "function call with expression arguments",
+			input: "let result = multiply(2 + 3, 4 * 5)",
+			expected: struct {
+				functionName   string
+				argumentCount  int
+				argumentValues []string
+			}{
+				functionName:   "multiply",
+				argumentCount:  2,
+				argumentValues: []string{"(2 + 3)", "(4 * 5)"},
+			},
+		},
+		{
+			name:  "nested function calls",
+			input: "let x = add(multiply(2, 3), 4)",
+			expected: struct {
+				functionName   string
+				argumentCount  int
+				argumentValues []string
+			}{
+				functionName:   "add",
+				argumentCount:  2,
+				argumentValues: []string{"multiply(2, 3)", "4"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create lexer and parser
+			lex := lexer.New(tt.input, "test.navi")
+			parser := New(lex)
+
+			// Parse program
+			program := parser.ParseProgram()
+
+			// Check for parse errors
+			if parser.Errors().HasErrors() {
+				t.Fatalf("parser errors: %v", parser.Errors())
+			}
+
+			// Should have exactly one statement
+			require.Len(t, program.Statements, 1, "program should have 1 statement")
+
+			// Check it's a let statement
+			letStmt, ok := program.Statements[0].(*ast.LetStatement)
+			require.True(t, ok, "statement should be LetStatement")
+
+			// Check the value is a call expression
+			callExpr, ok := letStmt.Value.(*ast.CallExpression)
+			require.True(t, ok, "value should be CallExpression, got %T", letStmt.Value)
+
+			// Check function name
+			funcIdent, ok := callExpr.Function.(*ast.Identifier)
+			require.True(t, ok, "function should be Identifier")
+			assert.Equal(t, tt.expected.functionName, funcIdent.Value)
+
+			// Check arguments
+			assert.Len(t, callExpr.Arguments, tt.expected.argumentCount)
+
+			for i, arg := range callExpr.Arguments {
+				assert.Equal(t, tt.expected.argumentValues[i], arg.String())
+			}
+		})
+	}
+}
+
+// Test function calls as statements (not just in let statements)
+func TestParseFunctionCallStatements(t *testing.T) {
+	input := `
+func main() {
+	print(42)
+	doSomething()
+	calculate(1 + 2, 3 * 4)
+}
+`
+
+	lex := lexer.New(input, "test.navi")
+	parser := New(lex)
+	program := parser.ParseProgram()
+
+	// Check for parse errors
+	assert.False(t, parser.Errors().HasErrors(), "parser should have no errors")
+
+	// Should have one function statement
+	require.Len(t, program.Statements, 1)
+
+	funcStmt, ok := program.Statements[0].(*ast.FunctionStatement)
+	require.True(t, ok, "should be FunctionStatement")
+
+	// Check function has 3 statements in body
+	assert.Len(t, funcStmt.Body.Statements, 3)
+
+	// Verify each statement is an ExpressionStatement containing a CallExpression
+	for i, stmt := range funcStmt.Body.Statements {
+		_, ok := stmt.(*ast.ExpressionStatement)
+		assert.True(t, ok, "statement %d should be ExpressionStatement", i)
+	}
+}

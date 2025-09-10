@@ -125,9 +125,34 @@ func (parser *Parser) parseStatement() ast.Statement {
 		return parser.parseLetStatement()
 	case token.FUNC:
 		return parser.parseFunctionStatement()
+	case token.RETURN:
+		return parser.parseReturnStatement()
+	case token.IDENT, token.INT, token.FLOAT, token.STRING, token.TRUE, token.FALSE:
+		return parser.parseExpressionStatement()
 	default:
 		return nil
 	}
+}
+
+func (parser *Parser) parseReturnStatement() ast.Statement {
+	returnStatement := &ast.ReturnStatement{
+		Token: parser.currentToken,
+	}
+
+	parser.advance()
+
+	if parser.isStatementEnd() {
+		returnStatement.ReturnValue = nil
+		return returnStatement
+	}
+
+	returnStatement.ReturnValue = parser.parseExpression(LOWEST)
+
+	if parser.isPeekToken(token.SEMICOLON) {
+		parser.advance()
+	}
+
+	return returnStatement
 }
 
 func (parser *Parser) parseLetStatement() ast.Statement {
@@ -184,6 +209,19 @@ func (parser *Parser) parseLetStatement() ast.Statement {
 	return statement
 }
 
+func (parser *Parser) parseExpressionStatement() ast.Statement {
+	statement := &ast.ExpressionStatement{
+		Token:      parser.currentToken,
+		Expression: parser.parseExpression(LOWEST),
+	}
+
+	if parser.isPeekToken(token.SEMICOLON) {
+		parser.advance()
+	}
+
+	return statement
+}
+
 func (parser *Parser) parseExpression(precedence int) ast.Expression {
 	// Handle prefix expressions (literals, identifiers, etc.)
 	left := parser.parseAtom()
@@ -193,6 +231,12 @@ func (parser *Parser) parseExpression(precedence int) ast.Expression {
 
 	for !parser.isStatementEnd() &&
 		precedence < getPrecedence(parser.peekToken.Type) {
+
+		if parser.isPeekToken(token.LEFT_PAREN) {
+			parser.advance()
+			left = parser.parseCallExpression(left)
+			continue
+		}
 
 		if !parser.peekToken.Type.IsOperator() {
 			break
@@ -216,6 +260,47 @@ func (parser *Parser) parseExpression(precedence int) ast.Expression {
 	}
 
 	return left
+}
+
+func (parser *Parser) parseCallExpression(function ast.Expression) ast.Expression {
+	call := &ast.CallExpression{
+		Token:     parser.currentToken,
+		Function:  function,
+		Arguments: []ast.Expression{},
+	}
+
+	call.Arguments = parser.parseCallArguments()
+
+	return call
+}
+
+func (parser *Parser) parseCallArguments() []ast.Expression {
+	arguments := []ast.Expression{}
+
+	if parser.isPeekToken(token.RIGHT_PAREN) {
+		parser.advance() // consume ')'
+		return arguments
+	}
+
+	parser.advance()
+
+	arguments = append(arguments, parser.parseExpression(LOWEST))
+
+	for parser.isPeekToken(token.COMMA) {
+		// move to next argument
+		parser.advance()
+		parser.advance()
+
+		arguments = append(arguments, parser.parseExpression(LOWEST))
+	}
+
+	if !parser.expectPeek(token.RIGHT_PAREN) {
+		return nil
+	}
+
+	parser.advance() // consume ')'
+
+	return arguments
 }
 
 func (parser *Parser) getRightPrecedence(operator token.TokenType, precedence int) int {
