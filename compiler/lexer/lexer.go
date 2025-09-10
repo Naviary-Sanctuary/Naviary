@@ -317,13 +317,12 @@ func (lexer *Lexer) NextToken() token.Token {
 
 	case '+':
 		if lexer.peek() == '=' {
-			char := lexer.char
 			lexer.advance()
 			lexer.advance()
 
 			t = token.Token{
 				Type:    token.PLUS_ASSIGN,
-				Literal: string(char) + "=",
+				Literal: "+=",
 				Line:    t.Line,
 				Column:  t.Column,
 			}
@@ -333,13 +332,22 @@ func (lexer *Lexer) NextToken() token.Token {
 		}
 	case '-':
 		if lexer.peek() == '=' {
-			char := lexer.char
 			lexer.advance()
 			lexer.advance()
 
 			t = token.Token{
 				Type:    token.MINUS_ASSIGN,
-				Literal: string(char) + "=",
+				Literal: "-=",
+				Line:    t.Line,
+				Column:  t.Column,
+			}
+		} else if lexer.peek() == '>' {
+			lexer.advance()
+			lexer.advance()
+
+			t = token.Token{
+				Type:    token.ARROW,
+				Literal: "->",
 				Line:    t.Line,
 				Column:  t.Column,
 			}
@@ -349,13 +357,12 @@ func (lexer *Lexer) NextToken() token.Token {
 		}
 	case '*':
 		if lexer.peek() == '=' {
-			char := lexer.char
 			lexer.advance()
 			lexer.advance()
 
 			t = token.Token{
 				Type:    token.ASTERISK_ASSIGN,
-				Literal: string(char) + "=",
+				Literal: "*=",
 				Line:    t.Line,
 				Column:  t.Column,
 			}
@@ -365,13 +372,12 @@ func (lexer *Lexer) NextToken() token.Token {
 		}
 	case '/':
 		if lexer.peek() == '=' {
-			char := lexer.char
 			lexer.advance()
 			lexer.advance()
 
 			t = token.Token{
 				Type:    token.SLASH_ASSIGN,
-				Literal: string(char) + "=",
+				Literal: "/=",
 				Line:    t.Line,
 				Column:  t.Column,
 			}
@@ -384,13 +390,12 @@ func (lexer *Lexer) NextToken() token.Token {
 		}
 	case '=':
 		if lexer.peek() == '=' {
-			char := lexer.char
 			lexer.advance()
 			lexer.advance()
 
 			t = token.Token{
 				Type:    token.EQUAL,
-				Literal: string(char) + "=",
+				Literal: "==",
 				Line:    t.Line,
 				Column:  t.Column,
 			}

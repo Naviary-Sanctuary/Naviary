@@ -330,3 +330,125 @@ func TestParseInfixExpressions(t *testing.T) {
 		})
 	}
 }
+
+func TestParseFunctionStatements(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected struct {
+			functionName string
+			parameters   []struct {
+				name     string
+				typeName string
+			}
+			returnType     string
+			bodyStatements int
+		}
+	}{
+		{
+			name:  "main function without parameters",
+			input: "func main() { }",
+			expected: struct {
+				functionName string
+				parameters   []struct {
+					name     string
+					typeName string
+				}
+				returnType     string
+				bodyStatements int
+			}{
+				functionName:   "main",
+				parameters:     []struct{ name, typeName string }{},
+				returnType:     "",
+				bodyStatements: 0,
+			},
+		},
+		{
+			name: "function with single parameter",
+			input: `func greet(name: string) {
+				let message = "Hello"
+			}`,
+			expected: struct {
+				functionName string
+				parameters   []struct {
+					name     string
+					typeName string
+				}
+				returnType     string
+				bodyStatements int
+			}{
+				functionName: "greet",
+				parameters: []struct{ name, typeName string }{
+					{name: "name", typeName: "string"},
+				},
+				returnType:     "",
+				bodyStatements: 1,
+			},
+		},
+		{
+			name:  "function with return type",
+			input: "func add(x: int, y: int) -> int { }",
+			expected: struct {
+				functionName string
+				parameters   []struct {
+					name     string
+					typeName string
+				}
+				returnType     string
+				bodyStatements int
+			}{
+				functionName: "add",
+				parameters: []struct{ name, typeName string }{
+					{name: "x", typeName: "int"},
+					{name: "y", typeName: "int"},
+				},
+				returnType:     "int",
+				bodyStatements: 0,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create lexer and parser
+			lex := lexer.New(tt.input, "test.navi")
+			parser := New(lex)
+
+			// Parse program
+			program := parser.ParseProgram()
+
+			// Check for parse errors
+			if parser.Errors().HasErrors() {
+				t.Fatalf("parser errors: %v", parser.Errors())
+			}
+
+			// Should have exactly one statement
+			require.Len(t, program.Statements, 1, "program should have 1 statement")
+
+			// Check it's a function statement
+			funcStmt, ok := program.Statements[0].(*ast.FunctionStatement)
+			require.True(t, ok, "statement should be FunctionStatement")
+
+			// Check function name
+			assert.Equal(t, tt.expected.functionName, funcStmt.Name.Value)
+
+			// Check parameters
+			assert.Len(t, funcStmt.Parameters, len(tt.expected.parameters))
+			for i, param := range funcStmt.Parameters {
+				assert.Equal(t, tt.expected.parameters[i].name, param.Name.Value)
+				assert.Equal(t, tt.expected.parameters[i].typeName, param.Type.Value)
+			}
+
+			// Check return type
+			if tt.expected.returnType == "" {
+				assert.Nil(t, funcStmt.ReturnType)
+			} else {
+				require.NotNil(t, funcStmt.ReturnType)
+				assert.Equal(t, tt.expected.returnType, funcStmt.ReturnType.Value)
+			}
+
+			// Check body statements count
+			assert.Len(t, funcStmt.Body.Statements, tt.expected.bodyStatements)
+		})
+	}
+}

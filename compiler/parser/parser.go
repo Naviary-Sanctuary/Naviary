@@ -123,6 +123,8 @@ func (parser *Parser) parseStatement() ast.Statement {
 	switch parser.currentToken.Type {
 	case token.LET:
 		return parser.parseLetStatement()
+	case token.FUNC:
+		return parser.parseFunctionStatement()
 	default:
 		return nil
 	}
@@ -282,4 +284,178 @@ func (parser *Parser) parseIdentifier() ast.Expression {
 		Token: parser.currentToken,
 		Value: parser.currentToken.Literal,
 	}
+}
+
+func (parser *Parser) parseBlockStatement() *ast.BlockStatement {
+	block := &ast.BlockStatement{
+		Token:      parser.currentToken,
+		Statements: []ast.Statement{},
+	}
+
+	parser.advance() // consume opening brace
+
+	for !parser.isCurrentToken(token.RIGHT_BRACE) && !parser.isCurrentToken(token.EOF) {
+		if parser.isCurrentToken(token.NEWLINE) {
+			parser.advance()
+			continue
+		}
+
+		statement := parser.parseStatement()
+
+		if statement != nil {
+			block.Statements = append(block.Statements, statement)
+		}
+
+		if !parser.isCurrentToken(token.RIGHT_BRACE) && !parser.isCurrentToken(token.EOF) {
+			parser.advance()
+		}
+	}
+
+	if !parser.expect(token.RIGHT_BRACE) {
+		return nil
+	}
+
+	return block
+}
+
+func (parser *Parser) parseTypeAnnotation() *ast.TypeAnnotation {
+	if !parser.expect(token.COLON) {
+		return nil
+	}
+
+	parser.advance()
+
+	if !parser.expect(token.IDENT) {
+		return nil
+	}
+
+	typeAnnotation := &ast.TypeAnnotation{
+		Token: parser.currentToken,
+		Value: parser.currentToken.Literal,
+	}
+
+	parser.advance()
+
+	return typeAnnotation
+}
+
+func (parser *Parser) parseFunctionParameters() []*ast.FunctionParameter {
+	parameters := []*ast.FunctionParameter{}
+
+	if parser.isPeekToken(token.RIGHT_PAREN) {
+		parser.advance() // consume ')'
+		return parameters
+	}
+
+	parser.advance()
+
+	for {
+		if !parser.expect(token.IDENT) {
+			return nil
+		}
+
+		parameter := &ast.FunctionParameter{
+			Name: &ast.Identifier{
+				Token: parser.currentToken,
+				Value: parser.currentToken.Literal,
+			},
+		}
+
+		parser.advance()
+
+		parameterType := parser.parseTypeAnnotation()
+		if parameterType == nil {
+			return nil
+		}
+
+		parameter.Type = *parameterType
+
+		parameters = append(parameters, parameter)
+
+		if parser.isCurrentToken(token.COMMA) {
+			parser.advance()
+			continue
+		}
+
+		if !parser.expect(token.RIGHT_PAREN) {
+			return nil
+		}
+
+		break
+	}
+
+	return parameters
+}
+
+func (parser *Parser) parseFunctionStatement() ast.Statement {
+	function := &ast.FunctionStatement{
+		Token: parser.currentToken,
+	}
+
+	if !parser.expectPeek(token.IDENT) {
+		return nil
+	}
+
+	parser.advance() // move to function name
+
+	function.Name = &ast.Identifier{
+		Token: parser.currentToken,
+		Value: parser.currentToken.Literal,
+	}
+
+	if !parser.expectPeek(token.LEFT_PAREN) {
+		return nil
+	}
+
+	parser.advance() // move to '('
+
+	parameters := parser.parseFunctionParameters()
+
+	if parameters == nil {
+		return nil
+	}
+
+	function.Parameters = parameters
+
+	if parser.isPeekToken(token.ARROW) {
+		//consume '->'
+		parser.advance()
+		parser.advance()
+
+		if !parser.expect(token.IDENT) {
+			parser.errorCollector.Add(
+				errors.SyntaxError,
+				parser.currentToken.Line,
+				parser.currentToken.Column,
+				len(parser.currentToken.Literal),
+				"expected return type after '->', got %s",
+				parser.currentToken.Literal,
+			)
+			return nil
+		}
+
+		function.ReturnType = &ast.TypeAnnotation{
+			Token: parser.currentToken,
+			Value: parser.currentToken.Literal,
+		}
+
+		parser.advance()
+	} else {
+		// No return type
+		parser.advance()
+	}
+
+	if !parser.expect(token.LEFT_BRACE) {
+		return nil
+	}
+
+	function.Body = parser.parseBlockStatement()
+
+	if function.Body == nil {
+		return nil
+	}
+
+	parser.advance()
+
+	return function
 }
