@@ -1,8 +1,3 @@
 func main() {
-    let mut count = 0;
-    count = count + 1;
-
-    if count > 0 {
-        print("count is over 0. value: ", count);
-    }
+    print(3+3)
 }

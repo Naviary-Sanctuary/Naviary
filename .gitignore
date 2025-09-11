@@ -10,3 +10,6 @@
 **/libnavi_runtime.a
 **/test_program
 **/test.o
+
+# output files
+examples/*.s
