@@ -6,16 +6,18 @@ High developer productivity, stable, powerful, and syntactically elegant languag
 
 ## Goals
 
-1. A compiled language producing lightweight binaries
-2. A strongly-typed language with the flexibility to create anonymous objects
+1. Run on the BEAM VM and ship as OTP releases or escripts (portability, reliability over single static binaries)
+2. Strongly-typed language with the flexibility to create anonymous objects
 3. Support for structured types in anonymous objects
 4. Extremely simple syntax
 5. Highly powerful type inference system
 6. Compiler written in its own language
-7. Multithreaded language with robust concurrency support, where threads are lightweight
-8. Object-oriented by default but supports functional programming pipelines ( |> )
+7. Massively concurrent and fault‑tolerant by design using lightweight BEAM processes and message passing
+8. Object‑oriented by default (classes and nominal interfaces), while supporting functional pipelines (|>) as first‑class
 9. Low learning curve
-10. High productivity, High modeling capacity, low learning curve and low memory.
+10. High productivity and modeling capacity with predictable performance and memory via BEAM GC
+11. First‑class interoperability with Erlang/Elixir/Gleam and the broader OTP ecosystem
+12. Excellent observability and tooling (observer, tracing, profiling) on BEAM
 
 ## Types
 

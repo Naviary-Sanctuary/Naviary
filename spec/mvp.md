@@ -5,19 +5,19 @@
 ### Core Decisions
 
 - **Source Code Extension**: .navi
-- **Compiler Language**: **Go**
-- **Backend**: **Direct Assembly emission** _Generics are monomorphized._
-- **Runtime/GC Implementation**: **C++20/23 (exceptions/RTTI disabled)**, exposing only **C ABI** (`extern "C"`).
-- **Memory Management**: GC-based (initially STW mark‑sweep → later generational → later concurrent)
-- **GC Strategy**: **Generational first**, followed by **Concurrent (SATB) old‑gen**
+- **Compiler Language**: **Gleam**
+- **Backend**: **BEAM target** — initially emit **Erlang source**, optional **Core Erlang** later for optimizations
+- **Runtime/GC**: Use **BEAM runtime and GC**; no custom native runtime
+- **Memory Management**: Managed by BEAM GC
 - **Type Inference**: Bidirectional + HM (rank‑1)
-- **OOP Model**: Single inheritance + nominal interfaces
+- **OOP Model**: Single inheritance + nominal interfaces; OO by default
+- **Observability**: Leverage OTP tools (observer, tracing, profiling)
 
-> Note: Backend is ASM, so stack maps and debug info are emitted directly in **DWARF (.file/.loc, .cfi\_\*)**.
+> Note: No direct ASM/DWARF/stack maps; rely on BEAM’s stack and tooling.
 
 ## Roadmap
 
-### 0.0.1 - Frontend Skeleton + Minimal Runtime
+### 0.0.1 - Frontend Skeleton + BEAM Codegen
 
 #### Lexer & Parser
 
@@ -42,41 +42,35 @@
 
 #### Code Generation
 
-- **Direct assembly emission** (ARM64)
-- Prologue/epilogue, calling convention, 16B stack alignment
-- IR → ASM mapping for `add/cmp/br/call/ret/load/store`
-- **DWARF** line/unwind info (`.file/.loc`, `.cfi_*`)
-- **Precise stack maps from day one** (foundation for future GC)
+- Emit **Erlang source** for functions/calls/arith/return/print
+- Map `print` to `io:format/2` or a small wrapper module
+- Preserve calling conventions compatible with OTP
 
-#### Runtime (C++)
+#### Runtime
 
-- Implemented in **C++ (exceptions/RTTI disabled)**, exposing **C ABI** functions (`rt_*`)
-- Initial GC: **Stop‑the‑world mark & sweep**, single-thread bump/arena allocator
-- Basic I/O: `rt_print*` (stdout)
-- **Object header format locked in**
+- No custom native runtime; run on BEAM
+- Provide a tiny standard module for I/O bridging if needed
 
 #### Goals
 
-- Compile 1‑10K LOC samples
-- ASAN/UBSAN clean builds
-- Root maps validated
+- Build and run via `erlc`/escript or `rebar3`
+- Hello world, arithmetic, simple function call samples
 
 ### 0.0.2 - Language Expansion + Infrastructure
 
 #### Type System Extension
 
-- Arrays: `int[]`, `string[]`
+- Arrays: `int[]`, `string[]` (mapped to lists or array lib)
 - Optionals: `int?`, `string?`
 - Tuples: `(int, string)`
-- **Local type inference**: `let x = 42` (bidirectional for let bindings only)
-- **Method boundary annotations required**
+- **Local type inference** for `let` bindings
 
 #### Control Flow
 
 - `while` loop
 - Basic `match` expression
-- Error handling: `Result<T, E>` + `?` operator
-- No panic unwinding (panic = abort)
+- Error handling: `Result<T, E>` + `?` operator (as `case` lowering)
+- Panic = process exit (no unwinding)
 
 #### Classes (Basic)
 
@@ -84,91 +78,74 @@
 - Method implementation
 - `this` reference
 - Field visibility (`private`, `public`)
-- **No inheritance yet**
-- **Fixed vtable layout**
+- Implementation strategy: compile to modules and records/maps
 
-#### Testing Infrastructure
+#### Testing & Tooling
 
 - Golden tests for parser/typing
-- **ASM output diff tests** (IR→ASM snapshot)
-- Runtime property tests
+- E2E tests on BEAM (escript/rebar3)
+- Baseline snapshots for codegen (Erlang source)
 
-#### x86-64 support (cross compile)
+#### Packaging
 
-- add x86-64 assembly
+- OTP release/escript packaging
 
-#### Goals
+### 0.0.3 - Optimization & Interop
 
-- 100+ compiler tests
-- Stable ASM baselines
+#### Optimizations
 
-### 0.0.3 - Generational GC (Big Win!)
+- Pattern‑match compilation improvements
 
-#### Young Generation GC
+- Tail‑recursion style lowering
+- Simple inlining and constant folding
 
-- Copying collector for young gen
-- TLAB (Thread‑Local Allocation Buffer)
-- Survivor spaces & promotion rules
-- **Card table** (512B cards)
-- Precise minor root scanning (stack maps & object maps)
+#### Interop
 
-#### Basic Optimizations
-
-- Simple inlining
-- Light SROA (Scalar Replacement)
-- Loop strength reduction
+- FFI story: prefer Ports; NIF only for tiny, non‑blocking ops
+- Erlang/Elixir/Gleam interop examples and guidelines
 
 #### Performance Targets
 
-- Minor GC avg < 1ms
-- Minor GC P95 < 3ms
-- Promotion rate < 10% on alloc‑heavy benchmarks
-- Single‑threaded performance baseline
+- Reduce allocations in hot paths
+- Avoid mailbox back‑pressure; maintain stable reductions
 
 ### 0.0.4 - Polymorphism + Generics
 
 #### OOP Completion
 
-- **Single inheritance** (`extends`)
-- **Nominal interfaces** (`implements`)
+- Single inheritance
+
+- Nominal interfaces (`implements`)
 - Method overriding
 - `super` keyword
-- Abstract classes
-- **Vtable dispatch** (measured overhead)
+- Dynamic dispatch semantics over BEAM terms
 
 #### Generics
 
-- Generic functions (monomorphization)
-- Generic classes
+- Generic functions and classes
+
+- Monomorphization at compile‑time where profitable; fallback to erased code when necessary
 - Type constraints (`where` clauses)
-- **No ad‑hoc overloading** (keep inference simple)
+- No ad‑hoc overloading
 
 #### Type System Rules
 
 - Annotations required at dynamic boundaries
 - Explicit `implements` declarations
-- Liskov substitution principle enforced
+- Liskov substitution enforced
 
 #### Goals
 
-- Dynamic dispatch overhead documented
-- Code size vs performance trade‑offs clear
+- Dispatch overhead documented
+- Code size vs performance trade‑offs on BEAM
 
-### 0.0.5 - Concurrency + Old‑gen Concurrent GC + Modules
+### 0.0.5 - Concurrency + Modules
 
 #### Language Features
 
-- `spawn` keyword + minimal channels
-- Memory model documentation
-- Basic synchronization primitives
-
-#### Old Generation Concurrent GC (C++)
-
-- SATB (Snapshot‑At‑The‑Beginning) marking
-- Concurrent marking for old gen
-- Background sweep
-- Full write barrier
-- Remembered sets
+- `async` at call‑site → `spawn` processes; `Task<T>` → pid + reply protocol
+- Basic channels via message passing conventions
+- Memory model documentation (leveraging BEAM guarantees)
 
 #### Module System
 
@@ -178,8 +155,8 @@
 
 #### Performance Targets
 
-- P99 STW (remark) < 5ms
-- GC CPU < 10% on simple web server
+- Stable latencies under load (P95 < target)
+- Scheduler‑friendly codegen (no long‑running NIFs)
 
 ### 0.0.6+ (Future)
 
@@ -192,11 +169,10 @@
 
 ## Key Design Invariants
 
-### Object Layout
+### OOP & Representation
 
-- Fixed object header format
-- ABI‑stable `this` layout
-- Vtable slot ordering frozen
+- Language‑level OO semantics stable (classes, `this`, interfaces)
+- Representation on BEAM via modules + records/maps; dispatch tables defined
 
 ### Type System
 
@@ -204,22 +180,20 @@
 - No global inference across OOP boundaries
 - Subtyping: no strengthening preconditions, no weakening postconditions
 
-### GC Integration
+### BEAM Integration
 
-- **Precise stack maps from day 1**
-- Card size: 512B
-- SATB write barrier for concurrent GC (0.0.5)
+- Memory management fully delegated to BEAM GC
+- No custom stack maps/write barriers
+- NIFs must be short and non‑blocking; prefer Ports/Tasks
 
 ## Benchmarking Targets
 
 ### Micro Benchmarks
 
-- Allocation rate (M/s)
-- Minor pause avg/P95/P99
-- Promotion rate
-- Card scan cost
-- Marking throughput
-- RSS
+- Reductions/sec on micro kernels
+- Message passing latency
+- Process heap/GC stats
+- Pattern‑match dispatch cost
 
 ### E2E Benchmarks
 
@@ -229,5 +203,5 @@
 
 ### Success Criteria
 
-- After 0.0.3: Minor avg < 1ms, P95 < 3ms
-- After 0.0.5: Remark STW < 5ms, GC CPU < 10%
+- 0.0.3: Allocation reductions and tail‑rec recursion in hot paths
+- 0.0.5: Stable latencies; GC CPU within target on simple web server
