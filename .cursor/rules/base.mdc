@@ -80,7 +80,7 @@ Always write one test at a time, make it run, then improve structure. Always run
 # Typescript-specific
 
 Prefer functional programming style over imperative style in Typescript.
-Always follow the instructions in plan.mdc. When I say "go", find the next unmarked test in plan.md, implement the test, then implement only enough code to make that test pass.
+When I say "go", find the next unmarked test in plan.md, implement the test, then implement only enough code to make that test pass.
 
 # ROLE AND EXPERTISE
 

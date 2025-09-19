@@ -1,0 +1,16 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Base Rule
+
+1. Be polite
+2. Work step by step.
+3. explain me your plan and confirm for actual working.
+4. explain 'Why do like this', 'logic flow', compare with other languages (ex. Go, Rust, Elixir, etc.) and what language most like with naviary
+5. don't let error.
+6. comment always be written with english.
+7. don't use abbreviation
+   7.1 ex - GC -> Garbage Collector
