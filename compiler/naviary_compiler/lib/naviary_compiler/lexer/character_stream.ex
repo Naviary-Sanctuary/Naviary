@@ -76,4 +76,100 @@ defmodule NaviaryCompiler.Lexer.CharacterStream do
   def get_position(%__MODULE__{position: position}) do
     {line, column}
   end
+
+  @doc """
+  Advances the stream by one character and return {char, new_stream}.
+  Returns {nil, stream} if at end.
+  Updates line and column appropriately for newlines.
+
+  ## Examples
+
+    iex> stream = CharacterStream.new("abc")
+    iex> {char, stream2} = CharacterStream.advance(stream)
+    iex> char
+    "a"
+    iex> stream2.column
+    2
+  """
+  def advance(%__MODULE__{source: source, position: position, line: line, column: column}) do
+    if at_end?(stream) do
+      {nil, stream}
+    else
+      char = String.at(source, position)
+      new_position = position + 1
+
+      {new_line, new_column} =
+        case char do
+          "\n" ->
+            {line + 1, 1}
+
+          _ ->
+            {line, column + 1}
+        end
+
+      new_stream = %__MODULE__{
+        source: source,
+        position: new_position,
+        line: new_line,
+        column: new_column
+      }
+
+      {char, new_stream}
+    end
+  end
+
+  @doc """
+  Advances the stream while the given predicate returns true.
+  Returns the consumed string and the new stream.
+
+  ## Examples
+
+    iex> stream = CharacterStream.new("hello world")
+    iex> {word, new_stream} = CharacterStream.advance_while(stream, &(&1 != " "))
+    iex> word
+    "hello"
+  """
+  def advance_while(%__MODULE__{} = stream, predicate) when is_function(predicate, 1) do
+    do_advance_while(stream, predicate, "")
+  end
+
+  defp do_advance_while(stream, predicate, acc) do
+    case peek(stream) do
+      nil ->
+        # End of stream
+        {acc, stream}
+
+      char ->
+        if predicate.(char) do
+          # Character matches predicate, continue collecting
+          {_char, new_stream} = advance(stream)
+          do_advance_while(new_stream, predicate, acc <> char)
+        else
+          # Character doesn't match, stop collecting
+          {acc, stream}
+        end
+    end
+  end
+
+  @doc """
+  Skips whitespace characters and return the new stream.
+  Whitespace includes space, tab, newline, and carriage return.
+
+  ## Examples
+
+    iex> stream = CharacterStream.new("  \\n  hello")
+    iex> new_stream = CharacterStream.skip_whitespace(stream)
+    iex> CharacterStream.peek(new_stream)
+    "h"
+  """
+  def skip_whitespace(%__MODULE__{} = stream) do
+    case peek(stream) do
+      char when char in [" ", "\t", "\n", "\r"] ->
+        {_char, new_stream} = advance(stream)
+        skip_whitespace(new_stream)
+
+      _ ->
+        stream
+    end
+  end
 end
