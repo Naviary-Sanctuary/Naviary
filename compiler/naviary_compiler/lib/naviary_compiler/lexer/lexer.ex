@@ -135,7 +135,61 @@ defmodule NaviaryCompiler.Lexer.Lexer do
     raise "scan_identifier not implemented yet"
   end
 
-  defp scan_operator_or_delimiter(_stream) do
-    raise "scan_operator_or_delimiter not implemented yet"
+  @spec scan_operator_or_delimiter(CharacterStream.t()) :: scan_result
+  defp scan_operator_or_delimiter(stream) do
+    start_line = stream.line
+    start_column = stream.column
+
+    current = CharacterStream.peek(stream)
+    next = CharacterStream.peek_ahead(stream, 1)
+
+    case check_two_char_operator(current, next) do
+      {token_type, 2} ->
+        {_, stream1} = CharacterStream.advance(stream)
+        {_, stream2} = CharacterStream.advance(stream1)
+
+        token = Token.new(token_type, current <> next, start_line, start_column)
+        {token, stream2}
+
+      nil ->
+        scan_single_char_operator_or_delimiter(stream, current, start_line, start_column)
+    end
   end
+
+  @spec scan_single_char_operator_or_delimiter(
+          CharacterStream.t(),
+          String.t() | nil,
+          non_neg_integer(),
+          non_neg_integer()
+        ) :: scan_result
+  defp scan_single_char_operator_or_delimiter(stream, current, start_line, start_column) do
+    # Get token type from TokenType module
+    token_type = TokenType.operator_type(current) || TokenType.delimiter_type(current)
+
+    case token_type do
+      nil ->
+        # Not an operator or delimiter
+        {nil, stream}
+
+      type ->
+        # Consume one character and create token
+        {_, new_stream} = CharacterStream.advance(stream)
+        token = Token.new(type, current, start_line, start_column)
+        {token, new_stream}
+    end
+  end
+
+  @spec check_two_char_operator(String.t() | nil, String.t() | nil) :: {atom(), 2} | nil
+  defp check_two_char_operator(first, second) when is_binary(first) and is_binary(second) do
+    two_char = first <> second
+
+    case two_char do
+      "==" -> {:equal, 2}
+      "!=" -> {:not_equal, 2}
+      "->" -> {:arrow, 2}
+      _ -> nil
+    end
+  end
+
+  defp check_two_char_operator(_, _), do: nil
 end
