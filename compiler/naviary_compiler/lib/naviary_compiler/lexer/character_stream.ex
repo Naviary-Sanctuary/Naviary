@@ -70,10 +70,7 @@ defmodule NaviaryCompiler.Lexer.CharacterStream do
     position >= byte_size(source)
   end
 
-  @doc """
-  Returns the current position info for error reporting.
-  """
-  def get_position(%__MODULE__{position: position}) do
+  def get_position(%__MODULE__{line: line, column: column}) do
     {line, column}
   end
 
@@ -91,7 +88,9 @@ defmodule NaviaryCompiler.Lexer.CharacterStream do
     iex> stream2.column
     2
   """
-  def advance(%__MODULE__{source: source, position: position, line: line, column: column}) do
+  def advance(
+        %__MODULE__{source: source, position: position, line: line, column: column} = stream
+      ) do
     if at_end?(stream) do
       {nil, stream}
     else

@@ -7,8 +7,9 @@ defmodule NaviaryCompiler.Lexer.Lexer do
   """
 
   alias NaviaryCompiler.Lexer.CharacterStream
-  alias NaviaryCompiler.Token.Token
+  alias NaviaryCompiler.Token
   alias NaviaryCompiler.Token.TokenType
+  alias NaviaryCompiler.Lexer.CharacterUtils
 
   @type lexer_result :: {:ok, [Token.t()]} | {:error, String.t()}
   @type scan_result :: {Token.t() | nil, CharacterStream.t()}
@@ -25,22 +26,13 @@ defmodule NaviaryCompiler.Lexer.Lexer do
     try do
       stream = CharacterStream.new(source_code)
 
-      {tokens, _final_stream} = tokenize_stream(stream)
+      {tokens, _final_stream} = tokenize_stream(stream, [])
       {:ok, tokens}
     rescue
       error -> {:error, "Lexer Error: #{Exception.message(error)}"}
     end
   end
 
-  @doc """
-  Core tokenization loop.
-
-  Recursively scans tokens from the character stream until EOF.
-  Accumulates tokens in reverse order for efficiency (will reverse at end).
-
-  This is the heart of the lexer - it decides what kind of token to scan next
-  based on the current character.
-  """
   @spec tokenize_stream(CharacterStream.t(), [Token.t()]) :: {[Token.t()], CharacterStream.t()}
   defp tokenize_stream(stream, tokens_accumulator) do
     stream = CharacterStream.skip_whitespace(stream)
@@ -66,14 +58,6 @@ defmodule NaviaryCompiler.Lexer.Lexer do
     end
   end
 
-  @doc """
-  Determines the type of the next token and delegates to appropriate scanner.
-
-  This is the dispatcher function - it looks at the current character
-  and decides which specific token scanner to call.
-
-  Returns {nil, stream} for unrecognized characters.
-  """
   @spec scan_next_token(CharacterStream.t()) :: scan_result
   defp scan_next_token(stream) do
     current_char = CharacterStream.peek(stream)
@@ -103,10 +87,6 @@ defmodule NaviaryCompiler.Lexer.Lexer do
 
   # Helper functions for character classification
 
-  @doc """
-  Checks if character can start an identifier.
-  Identifiers in Naviary start with letters or underscore.
-  """
   defp is_identifier_start(char) when is_binary(char) do
     (char >= "a" and char <= "z") or
       (char >= "A" and char <= "Z") or
@@ -115,9 +95,6 @@ defmodule NaviaryCompiler.Lexer.Lexer do
 
   defp is_identifier_start(_), do: false
 
-  @doc """
-  Checks if character can start an operator or delimiter.
-  """
   defp is_operator_or_delimiter_start(char) when is_binary(char) do
     # Check if character is in our operators or delimiters
     TokenType.operator_type(char) != nil or TokenType.delimiter_type(char) != nil
@@ -125,11 +102,29 @@ defmodule NaviaryCompiler.Lexer.Lexer do
 
   defp is_operator_or_delimiter_start(_), do: false
 
-  # Placeholder implementations for token scanners
-  # These will be implemented in the next steps
+  @spec scan_number(CharacterStream.t()) :: scan_result
+  defp scan_number(stream) do
+    start_line = stream.line
+    start_column = stream.column
 
-  defp scan_number(_stream) do
-    raise "scan_number not implemented yet"
+    scan_decimal_integer(stream, start_line, start_column)
+
+    # TODO: Implement hex, octal, and binary integer scanning
+    # case CharacterStream.peek(stream) do
+    #   "0" ->
+    #     {_zero, stream_after_zero} = CharacterStream.advance(stream)
+    # end
+  end
+
+  defp scan_decimal_integer(stream, start_line, start_column) do
+    {digits, new_stream} = CharacterStream.advance_while(stream, &CharacterUtils.is_digit/1)
+
+    if digits == "" do
+      {nil, stream}
+    else
+      token = Token.integer(digits, start_line, start_column)
+      {token, new_stream}
+    end
   end
 
   defp scan_string(_stream) do

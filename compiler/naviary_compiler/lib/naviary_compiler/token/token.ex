@@ -1,4 +1,5 @@
 defmodule NaviaryCompiler.Token do
+  alias NaviaryCompiler.Token.TokenType
   @moduledoc """
   Represents a single token form the lexical analysis phase.
   Contains its type, value, and position information for error reporting.
