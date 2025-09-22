@@ -131,8 +131,31 @@ defmodule NaviaryCompiler.Lexer.Lexer do
     raise "scan_string not implemented yet"
   end
 
-  defp scan_identifier(_stream) do
-    raise "scan_identifier not implemented yet"
+  @spec scan_identifier(CharacterStream.t()) :: scan_result
+  defp scan_identifier(stream) do
+    start_line = stream.line
+    start_column = stream.column
+
+    {identifier_text, new_stream} =
+      CharacterStream.advance_while(
+        stream,
+        &CharacterUtils.is_identifier_continue/1
+      )
+
+    if identifier_text == "" do
+      {nil, stream}
+    else
+      token =
+        case TokenType.keyword_type(identifier_text) do
+          nil ->
+            Token.identifier(identifier_text, start_line, start_column)
+
+          keyword_atom ->
+            Token.keyword(keyword_atom, start_line, start_column)
+        end
+
+      {token, new_stream}
+    end
   end
 
   @spec scan_operator_or_delimiter(CharacterStream.t()) :: scan_result

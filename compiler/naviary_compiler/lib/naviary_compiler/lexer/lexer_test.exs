@@ -90,4 +90,55 @@ defmodule NaviaryCompiler.Lexer.LexerTest do
       assert Enum.at(tokens, 3).type == :eof
     end
   end
+
+  describe "keywords" do
+    test "language keywords" do
+      {:ok, tokens} = Lexer.tokenize("let func if for return class mut else")
+
+      assert length(tokens) == 9
+      assert Enum.at(tokens, 0).type == :let
+      assert Enum.at(tokens, 1).type == :func
+      assert Enum.at(tokens, 2).type == :if
+      assert Enum.at(tokens, 3).type == :for
+      assert Enum.at(tokens, 4).type == :return
+      assert Enum.at(tokens, 5).type == :class
+      assert Enum.at(tokens, 6).type == :mut
+      assert Enum.at(tokens, 7).type == :else
+      assert Enum.at(tokens, 8).type == :eof
+    end
+
+    test "boolean literals" do
+      {:ok, tokens} = Lexer.tokenize("true false")
+
+      assert Enum.at(tokens, 0).type == :true_literal
+      assert Enum.at(tokens, 1).type == :false_literal
+      assert Enum.at(tokens, 2).type == :eof
+    end
+  end
+
+  describe "identifiers" do
+    test "simple identifiers" do
+      {:ok, tokens} = Lexer.tokenize("myVariable userName")
+
+      assert Enum.at(tokens, 0).type == :identifier
+      assert Enum.at(tokens, 0).value == "myVariable"
+      assert Enum.at(tokens, 1).type == :identifier
+      assert Enum.at(tokens, 1).value == "userName"
+      assert Enum.at(tokens, 2).type == :eof
+    end
+  end
+
+  describe "mixed keywords and identifiers" do
+    test "let x = 10" do
+      {:ok, tokens} = Lexer.tokenize("let x = 10")
+
+      assert Enum.at(tokens, 0).type == :let
+      assert Enum.at(tokens, 1).type == :identifier
+      assert Enum.at(tokens, 1).value == "x"
+      assert Enum.at(tokens, 2).type == :assign
+      assert Enum.at(tokens, 3).type == :integer_literal
+      assert Enum.at(tokens, 3).value == "10"
+      assert Enum.at(tokens, 4).type == :eof
+    end
+  end
 end
