@@ -127,8 +127,55 @@ defmodule NaviaryCompiler.Lexer.Lexer do
     end
   end
 
-  defp scan_string(_stream) do
-    raise "scan_string not implemented yet"
+  @spec scan_string(CharacterStream.t()) :: scan_result
+  defp scan_string(stream) do
+    start_line = stream.line
+    start_column = stream.column
+
+    {quote_char, stream_after_quote} = CharacterStream.advance(stream)
+
+    if quote_char != "\"" do
+      {nil, stream}
+    else
+      case read_string_content(stream_after_quote, "") do
+        {:ok, content, final_stream} ->
+          token = Token.string(content, start_line, start_column)
+          {token, final_stream}
+
+        {:error, error_message} ->
+          error_token = Token.new(:error, error_message, start_line, start_column)
+          {error_token, stream_after_quote}
+      end
+    end
+  end
+
+  @spec read_string_content(CharacterStream.t(), String.t()) ::
+          {:ok, String.t(), CharacterStream.t()} | {:error, String.t()}
+  defp read_string_content(stream, accumulator) do
+    case CharacterStream.peek(stream) do
+      nil ->
+        {:error, "Unterminated string literal"}
+
+      "\"" ->
+        {_quote, stream_after_quote} = CharacterStream.advance(stream)
+        {:ok, accumulator, stream_after_quote}
+
+      "\\" ->
+        {_backslash, stream_after_backslash} = CharacterStream.advance(stream)
+
+        case CharacterStream.peek(stream_after_backslash) do
+          nil ->
+            {:error, "Unterminated string literal (ends with backslash)"}
+
+          _escaped_char ->
+            {char, next_stream} = CharacterStream.advance(stream_after_backslash)
+            read_string_content(next_stream, accumulator <> "\\" <> char)
+        end
+
+      _other_char ->
+        {char, next_stream} = CharacterStream.advance(stream)
+        read_string_content(next_stream, accumulator <> char)
+    end
   end
 
   @spec scan_identifier(CharacterStream.t()) :: scan_result

@@ -141,4 +141,30 @@ defmodule NaviaryCompiler.Lexer.LexerTest do
       assert Enum.at(tokens, 4).type == :eof
     end
   end
+
+  describe "basic strings" do
+    test "simple string" do
+      {:ok, tokens} = Lexer.tokenize("\"Hello World\"")
+
+      assert Enum.at(tokens, 0).type == :string_literal
+      assert Enum.at(tokens, 0).value == "Hello World"
+    end
+
+    test "empty string" do
+      {:ok, tokens} = Lexer.tokenize("\"\"")
+
+      assert Enum.at(tokens, 0).type == :string_literal
+      assert Enum.at(tokens, 0).value == ""
+    end
+  end
+
+  describe "escape sequences" do
+    test "escaped quote" do
+      {:ok, tokens} = Lexer.tokenize("\"Say \\\"Hi\\\"\"")
+
+      assert Enum.at(tokens, 0).type == :string_literal
+      # We store escape as-is
+      assert Enum.at(tokens, 0).value == "Say \\\"Hi\\\""
+    end
+  end
 end
