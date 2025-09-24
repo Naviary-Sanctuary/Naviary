@@ -161,14 +161,56 @@ defmodule NaviaryCompiler.Lexer.CharacterStream do
     iex> CharacterStream.peek(new_stream)
     "h"
   """
-  def skip_whitespace(%__MODULE__{} = stream) do
+  def skip_whitespace_and_comments(%__MODULE__{} = stream) do
     case peek(stream) do
       char when char in [" ", "\t", "\n", "\r"] ->
         {_char, new_stream} = advance(stream)
-        skip_whitespace(new_stream)
+        skip_whitespace_and_comments(new_stream)
+
+      "/" ->
+        case peek_ahead(stream, 1) do
+          "/" ->
+            stream_after_comment = skip_line_comment(stream)
+            skip_whitespace_and_comments(stream_after_comment)
+
+          _ ->
+            stream
+        end
 
       _ ->
         stream
+    end
+  end
+
+  @doc """
+  Skip single line comment starting with //
+  Assumes the stream is positioned at the first /
+  Returns the stream after the comment
+  """
+  def skip_line_comment(%__MODULE__{} = stream) do
+    case {peek(stream), peek_ahead(stream, 1)} do
+      {"/", "/"} ->
+        # Consume //
+        {_, stream1} = advance(stream)
+        {_, stream2} = advance(stream1)
+        skip_until_newline(stream2)
+
+      _ ->
+        stream
+    end
+  end
+
+  defp skip_until_newline(%__MODULE__{} = stream) do
+    case peek(stream) do
+      nil ->
+        stream
+
+      "\n" ->
+        stream
+
+      _ ->
+        {_, next_stream} = advance(stream)
+        skip_until_newline(next_stream)
     end
   end
 end

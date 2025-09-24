@@ -167,4 +167,55 @@ defmodule NaviaryCompiler.Lexer.LexerTest do
       assert Enum.at(tokens, 0).value == "Say \\\"Hi\\\""
     end
   end
+
+  describe "single line comments" do
+    test "comment at start" do
+      {:ok, tokens} = Lexer.tokenize("// This is a comment\n42")
+
+      # Comment is ignored, only 42 and EOF
+      assert Enum.at(tokens, 0).type == :integer_literal
+      assert Enum.at(tokens, 0).value == "42"
+      assert Enum.at(tokens, 1).type == :eof
+    end
+
+    test "comment after code" do
+      {:ok, tokens} = Lexer.tokenize("let x = 10 // Initialize x")
+
+      # Remove EOF
+      tokens = Enum.slice(tokens, 0..-2)
+
+      assert length(tokens) == 4
+      assert Enum.at(tokens, 0).type == :let
+      assert Enum.at(tokens, 1).type == :identifier
+      assert Enum.at(tokens, 2).type == :assign
+      assert Enum.at(tokens, 3).type == :integer_literal
+    end
+
+    test "multiple comments" do
+      source = """
+      // First comment
+      // Second comment
+      let x = 5
+      // Third comment
+      """
+
+      {:ok, tokens} = Lexer.tokenize(source)
+      tokens = Enum.slice(tokens, 0..-2)
+
+      # Only actual code tokens
+      assert length(tokens) == 4
+      assert Enum.at(tokens, 0).type == :let
+    end
+
+    test "division operator not confused with comment" do
+      {:ok, tokens} = Lexer.tokenize("10 / 2")
+
+      tokens = Enum.slice(tokens, 0..-2)
+
+      assert length(tokens) == 3
+      assert Enum.at(tokens, 0).type == :integer_literal
+      assert Enum.at(tokens, 1).type == :slash
+      assert Enum.at(tokens, 2).type == :integer_literal
+    end
+  end
 end

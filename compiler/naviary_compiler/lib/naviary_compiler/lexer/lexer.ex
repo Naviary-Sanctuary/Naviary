@@ -35,7 +35,7 @@ defmodule NaviaryCompiler.Lexer.Lexer do
 
   @spec tokenize_stream(CharacterStream.t(), [Token.t()]) :: {[Token.t()], CharacterStream.t()}
   defp tokenize_stream(stream, tokens_accumulator) do
-    stream = CharacterStream.skip_whitespace(stream)
+    stream = CharacterStream.skip_whitespace_and_comments(stream)
 
     case CharacterStream.at_end?(stream) do
       true ->
