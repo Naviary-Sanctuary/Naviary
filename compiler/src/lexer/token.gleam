@@ -31,6 +31,8 @@ pub type Token {
   NotEquals
   LessThan
   GreaterThan
+  LessThanOrEqual
+  GreaterThanOrEqual
 
   // Delimiters
   LeftParen
