@@ -53,8 +53,14 @@
 
 #### Goals
 
-- Build and run via `erlc`/escript or `rebar3`
-- Hello world, arithmetic, simple function call samples
+Run below code.
+
+```navi
+func main() {
+  let a = 1 + 2
+  print(a)
+}
+```
 
 ### 0.0.2 - Language Expansion + Infrastructure
 
