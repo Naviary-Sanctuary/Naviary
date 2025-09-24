@@ -38,12 +38,27 @@ pub fn advance(lexer: Lexer) -> Lexer {
     char -> char
   }
 
+  let is_newline = case lexer.current_char {
+    "\n" -> True
+    _ -> False
+  }
+
+  let new_line = case is_newline {
+    True -> lexer.line + 1
+    False -> lexer.line
+  }
+  let new_column = case is_newline {
+    True -> 0
+    False -> lexer.column + 1
+  }
+
   Lexer(
     ..lexer,
     position: lexer.next_position,
     next_position: lexer.next_position + 1,
     current_char: next_char,
-    column: lexer.column + 1,
+    line: new_line,
+    column: new_column,
   )
 }
 
@@ -148,18 +163,18 @@ pub fn read_identifier_or_keyword(lexer: Lexer) -> #(Lexer, Token) {
 
 pub fn read_operator(lexer: Lexer) -> #(Lexer, Token) {
   case lexer.current_char {
-    "+" -> #(lexer, token.Plus)
+    "+" -> #(lexer |> advance(), token.Plus)
     "-" -> {
       case peek(lexer) {
         ">" -> {
           let lexer_after_arrow = lexer |> advance() |> advance()
           #(lexer_after_arrow, token.Arrow)
         }
-        _ -> #(lexer, token.Minus)
+        _ -> #(lexer |> advance(), token.Minus)
       }
     }
-    "*" -> #(lexer, token.Asterisk)
-    "/" -> #(lexer, token.Slash)
+    "*" -> #(lexer |> advance(), token.Asterisk)
+    "/" -> #(lexer |> advance(), token.Slash)
     "=" -> {
       case peek(lexer) {
         "=" -> #(lexer |> advance() |> advance(), token.Equals)
@@ -194,7 +209,7 @@ pub fn read_operator(lexer: Lexer) -> #(Lexer, Token) {
     "," -> #(lexer |> advance(), token.Comma)
     ";" -> #(lexer |> advance(), token.Semicolon)
     ":" -> #(lexer |> advance(), token.Colon)
-    _ -> #(lexer, token.EOF)
+    _ -> #(lexer |> advance(), token.EOF)
   }
 }
 
