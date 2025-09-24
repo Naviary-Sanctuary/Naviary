@@ -5,7 +5,7 @@
 ### Core Decisions
 
 - **Source Code Extension**: .navi
-- **Compiler Language**: **Elixir**
+- **Compiler Language**: **Gleam**
 - **Backend**: **BEAM target** — initially emit **Erlang source**, optional **Core Erlang** later for optimizations
 - **Runtime/GC**: Use **BEAM runtime and GC**; no custom native runtime
 - **Memory Management**: Managed by BEAM GC
