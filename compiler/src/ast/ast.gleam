@@ -4,6 +4,7 @@ pub type Expression {
   FloatLiteral(value: Float)
   BoolLiteral(value: Bool)
   StringLiteral(value: String)
+  NilLiteral
 
   // Variable reference
   Identifier(name: String)
