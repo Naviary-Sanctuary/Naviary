@@ -13,3 +13,5 @@
 
 # output files
 examples/*.s
+**/*.beam
+**/*.erl
