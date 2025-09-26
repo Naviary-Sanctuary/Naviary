@@ -17,17 +17,17 @@ pub fn new(tokens: List(TokenWithPosition)) -> Parser {
   Parser(tokens, consumed: [])
 }
 
-// Main parsing function: takes source code and returns AST
 pub fn parse(source: String) -> Result(ast.Program, ParseError) {
-  // Tokenize the source
   let tokens = tokenize(source)
-
-  // Create parser with tokens
   let parser = new(tokens)
 
-  // Parse the program
   case parse_program(parser) {
-    Ok(#(_final_parser, program)) -> Ok(program)
+    Ok(#(_final_parser, program)) -> {
+      case validate_main_function(program) {
+        Ok(_) -> Ok(program)
+        Error(error) -> Error(error)
+      }
+    }
     Error(error) -> Error(error)
   }
 }
@@ -43,39 +43,32 @@ fn tokenize_recursive(
   lexer_state: lexer.Lexer,
   accumulated_tokens: List(TokenWithPosition),
 ) -> List(TokenWithPosition) {
-  let #(next_lexer, token_with_position) = lexer.next_token(lexer_state)
+  let #(next_lexer, token_with_position) = lexer_state |> lexer.next_token()
 
   case token_with_position.token {
     token.EOF -> {
-      // Include EOF token and reverse the list
       list.reverse([token_with_position, ..accumulated_tokens])
     }
     _ -> {
-      // Continue tokenizing
       let new_accumulated = [token_with_position, ..accumulated_tokens]
       tokenize_recursive(next_lexer, new_accumulated)
     }
   }
 }
 
-// Parse entire program: collection of functions
 pub fn parse_program(
   parser: Parser,
 ) -> Result(#(Parser, ast.Program), ParseError) {
   parse_program_recursive(parser, [])
 }
 
-// Helper to parse multiple functions recursively
 fn parse_program_recursive(
   parser: Parser,
   accumulated_functions: List(ast.Function),
 ) -> Result(#(Parser, ast.Program), ParseError) {
-  // Skip any leading newlines
   let parser_cleaned = skip_newlines(parser)
 
-  // Check current token
   case current_token(parser_cleaned) {
-    // End of file reached
     Error(_) -> {
       let functions = list.reverse(accumulated_functions)
       let program = ast.Program(functions: functions)
@@ -83,24 +76,20 @@ fn parse_program_recursive(
     }
     Ok(token_with_position) -> {
       case token_with_position.token {
-        // End of file token
         token.EOF -> {
           let functions = list.reverse(accumulated_functions)
           let program = ast.Program(functions: functions)
           Ok(#(parser_cleaned, program))
         }
-        // Function definition
         token.Func -> {
           case parse_function(parser_cleaned) {
             Error(error) -> Error(error)
             Ok(#(parser_after_function, function)) -> {
               let new_accumulated = [function, ..accumulated_functions]
-              // Continue parsing more functions
               parse_program_recursive(parser_after_function, new_accumulated)
             }
           }
         }
-        // Unexpected token at top level
         other -> {
           let message =
             "Expected 'func' or end of file but got " <> describe_token(other)
@@ -111,7 +100,6 @@ fn parse_program_recursive(
   }
 }
 
-// Skip newlines (used between top-level definitions)
 fn skip_newlines(parser: Parser) -> Parser {
   case current_token(parser) {
     Ok(token_with_position) -> {
@@ -296,13 +284,11 @@ fn expect(parser: Parser, expected: Token) -> Result(Parser, ParseError) {
 
 fn compare_token_type(actual: Token, expected: Token) -> Bool {
   case actual, expected {
-    // For tokens with values, just check the variant type
     token.IntLiteral(_), token.IntLiteral(_) -> True
     token.FloatLiteral(_), token.FloatLiteral(_) -> True
     token.StringLiteral(_), token.StringLiteral(_) -> True
     token.BoolLiteral(_), token.BoolLiteral(_) -> True
     token.Identifier(_), token.Identifier(_) -> True
-    // For simple tokens, they must be exactly the same
     a, b -> a == b
   }
 }
@@ -835,6 +821,22 @@ fn parse_optional_return_type(parser: Parser) -> #(Parser, ast.Type) {
     Error(_) -> {
       // End of input, default to Nil
       #(parser, ast.Nil)
+    }
+  }
+}
+
+pub fn validate_main_function(program: ast.Program) -> Result(Nil, ParseError) {
+  let has_main =
+    list.any(program.functions, fn(function) { function.name == "main" })
+
+  case has_main {
+    True -> Ok(Nil)
+    False -> {
+      let position = token.Position(line: 0, column: 0)
+      Error(ParseError(
+        message: "No 'main' function found. Every program must have a main function as entry point.",
+        position: position,
+      ))
     }
   }
 }
