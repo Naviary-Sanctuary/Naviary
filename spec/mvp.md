@@ -1,59 +1,25 @@
-# Naviary MVP Roadmap
+## Naviary MVP Roadmap
 
 ## Implementation Design
 
 ### Core Decisions
 
 - **Source Code Extension**: .navi
-- **Compiler Language**: **Gleam**
-- **Backend**: **BEAM target** — initially emit **Erlang source**, optional **Core Erlang** later for optimizations
-- **Runtime/GC**: Use **BEAM runtime and GC**; no custom native runtime
+- **Compiler Language**: **Go**
+- **Backend**: **BEAM target** — emit **Erlang source**
+- **Runtime/GC**: Use **BEAM runtime and GC**
 - **Memory Management**: Managed by BEAM GC
-- **Type Inference**: Bidirectional + HM (rank‑1)
-- **OOP Model**: Single inheritance + nominal interfaces; OO by default
+- **Type Inference**: Bidirectional + HM (rank‑1) - from 0.0.3
+- **OOP Model**: Single inheritance + nominal interfaces - from 0.0.4
 - **Observability**: Leverage OTP tools (observer, tracing, profiling)
-
-> Note: No direct ASM/DWARF/stack maps; rely on BEAM’s stack and tooling.
 
 ## Roadmap
 
-### 0.0.1 - Frontend Skeleton + BEAM Codegen
+### 0.0.1 - Minimal Working Compiler (Week 1)
 
-#### Lexer & Parser
+#### Goal
 
-##### Tokens
-
-- Keywords: `let`, `func`, `if`, `for`, `return`, `class`
-- Types: `int`, `float`, `string`, `bool`
-- Operators: `+`, `-`, `*`, `/`, `==`, `!=`, `=`
-
-##### Grammar
-
-- Variable declaration: `let`, `let mut`
-- Function definition & calling
-- Control flow: `if-else`, `for` loop
-- Main entry point
-
-#### Type System (Explicit Only)
-
-- Basic types: `int`, `float`, `string`, `bool`
-- Type checking (no inference yet)
-- Function signature verification
-
-#### Code Generation
-
-- Emit **Erlang source** for functions/calls/arith/return/print
-- Map `print` to `io:format/2` or a small wrapper module
-- Preserve calling conventions compatible with OTP
-
-#### Runtime
-
-- No custom native runtime; run on BEAM
-- Provide a tiny standard module for I/O bridging if needed
-
-#### Goals
-
-Run below code.
+Run this code successfully:
 
 ```navi
 func main() {
@@ -62,152 +28,232 @@ func main() {
 }
 ```
 
-### 0.0.2 - Language Expansion + Infrastructure
+#### Lexer
+
+- **Tokens**: Numbers (integers only), identifiers
+- **Keywords**: `let`, `func`, `print`
+- **Operators**: `+`, `-`, `*`, `/`, `=`
+- **Symbols**: `(`, `)`, `{`, `}`
+
+#### Parser
+
+- Function definition (main only)
+- Let statements (immutable only)
+- Binary expressions (arithmetic)
+- Function calls (print only)
+- **NO type annotations** - everything is integer
+
+#### Code Generation
+
+- Emit Erlang source
+- Map `main` → `start/0`
+- Map `print` → `io:format("~p~n", [X])`
+- Basic arithmetic operations
+
+#### NO Type Checking
+
+- Assume everything is integer
+- Type system deferred to 0.0.2
+
+### 0.0.2 - Type System & Control Flow (Week 2-3)
+
+#### Type System
+
+- **Basic types**: `int`, `float`, `string`, `bool`
+- **Type annotations**: `let x: int = 5`
+- **Type checking**: Full type verification
+- **Function signatures**: `func add(a: int, b: int) -> int`
+
+#### Control Flow
+
+- `if-else` statements
+- `for` loops: `for i in 0..10`
+- Multiple function definitions
+- Return statements
+
+#### Extended Operators
+
+- Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- Logical: `&&`, `||`, `!`
+
+### 0.0.3 - Arrays & Error Handling (Week 4-5)
 
 #### Type System Extension
 
-- Arrays: `int[]`, `string[]` (mapped to lists or array lib)
-- Optionals: `int?`, `string?`
-- Tuples: `(int, string)`
+- Arrays: `int[]`, `string[]` (mapped to Erlang lists)
+- Optionals: `int?`, `string?` (mapped to `{ok, Value} | nil`)
+- Tuples: `(int, string)` (mapped to Erlang tuples)
 - **Local type inference** for `let` bindings
 
 #### Control Flow
 
-- `while` loop
-- Basic `match` expression
-- Error handling: `Result<T, E>` + `?` operator (as `case` lowering)
-- Panic = process exit (no unwinding)
+- `while` loops
+- Basic `match` expressions (pattern matching)
 
-#### Classes (Basic)
+#### Error Handling
+
+- `Result<T, E>` type
+- `?` operator for error propagation
+- Panic as process exit
+
+### 0.0.4 - Basic Classes (Month 2)
+
+#### Classes (No Inheritance)
 
 - Class declaration with fields
-- Method implementation
-- `this` reference
+- Constructor
+- Methods with `this` reference
 - Field visibility (`private`, `public`)
-- Implementation strategy: compile to modules and records/maps
 
-#### Testing & Tooling
+#### Implementation Strategy
 
-- Golden tests for parser/typing
-- E2E tests on BEAM (escript/rebar3)
-- Baseline snapshots for codegen (Erlang source)
+```navi
+class Person {
+  name: string
+  age: int
 
-#### Packaging
+  func greet() -> string {
+    return "Hello, " + this.name
+  }
+}
+```
 
-- OTP release/escript packaging
+Compiles to:
 
-### 0.0.3 - Optimization & Interop
+```erlang
+-module(person).
+-record(person, {name, age}).
 
-#### Optimizations
+new(Name, Age) -> #person{name=Name, age=Age}.
+greet(This) -> "Hello, " ++ This#person.name.
+```
 
-- Pattern‑match compilation improvements
-
-- Tail‑recursion style lowering
-- Simple inlining and constant folding
-
-#### Interop
-
-- FFI story: prefer Ports; NIF only for tiny, non‑blocking ops
-- Erlang/Elixir/Gleam interop examples and guidelines
-
-#### Performance Targets
-
-- Reduce allocations in hot paths
-- Avoid mailbox back‑pressure; maintain stable reductions
-
-### 0.0.4 - Polymorphism + Generics
+### 0.0.5 - Inheritance & Interfaces (Month 3)
 
 #### OOP Completion
 
 - Single inheritance
-
-- Nominal interfaces (`implements`)
+- Interfaces (`implements`)
 - Method overriding
 - `super` keyword
-- Dynamic dispatch semantics over BEAM terms
+- Virtual method dispatch via dispatch tables
+
+#### Type System
+
+- Subtyping rules
+- Interface satisfaction checking
+- Liskov substitution principle
+
+### 0.0.6 - Generics & Advanced Features (Month 4)
 
 #### Generics
 
-- Generic functions and classes
+- Generic functions: `func map<T, U>(items: T[], f: func(T) -> U) -> U[]`
+- Generic classes: `class List<T>`
+- Type constraints
 
-- Monomorphization at compile‑time where profitable; fallback to erased code when necessary
-- Type constraints (`where` clauses)
-- No ad‑hoc overloading
+#### Advanced Control Flow
 
-#### Type System Rules
+- Full pattern matching with exhaustiveness checking
+- Guards in match expressions
 
-- Annotations required at dynamic boundaries
-- Explicit `implements` declarations
-- Liskov substitution enforced
+### 0.0.7 - Concurrency (Month 5)
 
-#### Goals
+#### Concurrency Model
 
-- Dispatch overhead documented
-- Code size vs performance trade‑offs on BEAM
+- `async` keyword at call-site
+- `Task<T>` type wrapping Erlang processes
+- `.await()` for synchronization
+- Channel abstraction over message passing
 
-### 0.0.5 - Concurrency + Modules
+### 0.0.8+ - Future Features
 
-#### Language Features
-
-- `async` at call‑site → `spawn` processes; `Task<T>` → pid + reply protocol
-- Basic channels via message passing conventions
-- Memory model documentation (leveraging BEAM guarantees)
-
-#### Module System
-
-- Import/export mechanism
-- Package manager (basic)
-- Minimal standard library
-
-#### Performance Targets
-
-- Stable latencies under load (P95 < target)
-- Scheduler‑friendly codegen (no long‑running NIFs)
-
-### 0.0.6+ (Future)
-
-- Pipeline operator (`|>`)
-- Anonymous/structural objects
-- Full pattern matching with exhaustiveness
-- Richer standard library
-- Lambda & closures
+- Module system & imports
+- Package manager
+- Standard library
+- Lambda expressions & closures
 - Enum types
+- Pipeline operator (`|>`)
+- Structured/anonymous objects
 
-## Key Design Invariants
+## Implementation Timeline
 
-### OOP & Representation
+### Week-by-Week Breakdown
 
-- Language‑level OO semantics stable (classes, `this`, interfaces)
-- Representation on BEAM via modules + records/maps; dispatch tables defined
+**Week 1: MVP (0.0.1)**
 
-### Type System
+- Day 1-2: Lexer
+- Day 3-4: Parser
+- Day 5: Code Generator
+- Weekend: Testing & debugging
 
-- Method bodies check with annotations
-- No global inference across OOP boundaries
-- Subtyping: no strengthening preconditions, no weakening postconditions
+**Week 2: Type System (0.0.2 Part 1)**
 
-### BEAM Integration
+- Day 1-2: Type checker architecture
+- Day 3-4: Basic type checking
+- Day 5: Function type checking
 
-- Memory management fully delegated to BEAM GC
-- No custom stack maps/write barriers
-- NIFs must be short and non‑blocking; prefer Ports/Tasks
+**Week 3: Control Flow (0.0.2 Part 2)**
 
-## Benchmarking Targets
+- Day 1-2: if-else implementation
+- Day 3-4: for loop implementation
+- Day 5: Integration testing
 
-### Micro Benchmarks
+**Month 2: Classes**
 
-- Reductions/sec on micro kernels
-- Message passing latency
-- Process heap/GC stats
-- Pattern‑match dispatch cost
+- Week 1: Class parsing
+- Week 2: Erlang record mapping
+- Week 3: Method dispatch
+- Week 4: Testing & optimization
 
-### E2E Benchmarks
+## Key Technical Decisions
 
-- Echo server
-- JSON parser
-- Template renderer
+### Erlang Mapping Rules
 
-### Success Criteria
+| Naviary         | Erlang                          |
+| --------------- | ------------------------------- |
+| `let x = 5`     | `X = 5`                         |
+| `let mut x = 5` | `X1 = 5, X2 = ...` (versioning) |
+| `class`         | Erlang module + record          |
+| `int[]`         | Erlang list                     |
+| `int?`          | `{ok, Value} \| nil`            |
+| `match`         | `case` expression               |
+| `async f()`     | `spawn(fun() -> f() end)`       |
 
-- 0.0.3: Allocation reductions and tail‑rec recursion in hot paths
-- 0.0.5: Stable latencies; GC CPU within target on simple web server
+### Naming Conventions
+
+- Variables: `camelCase` → `CamelCase` (Erlang requires uppercase)
+- Functions: `camelCase` → `camelCase`
+- Classes: `PascalCase` → `pascalcase` (Erlang module names)
+
+### Performance Targets
+
+- **0.0.1-0.0.3**: Correctness over performance
+- **0.0.4-0.0.6**: Basic optimizations (tail recursion, pattern match compilation)
+- **0.0.7+**: Performance benchmarking and optimization
+
+## Success Criteria
+
+### 0.0.1 (MVP)
+
+- ✅ Compiles simple arithmetic program
+- ✅ Generates valid Erlang code
+- ✅ Runs on BEAM successfully
+
+### 0.0.2
+
+- ✅ Type safety guaranteed
+- ✅ All type errors caught at compile time
+- ✅ Control flow works correctly
+
+### 0.0.4
+
+- ✅ Classes compile to efficient Erlang modules
+- ✅ Method dispatch works correctly
+- ✅ No runtime overhead compared to hand-written Erlang
+
+### 0.0.7
+
+- ✅ Concurrent programs work correctly
+- ✅ No race conditions
+- ✅ Good performance under load
