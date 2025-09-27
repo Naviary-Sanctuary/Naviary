@@ -67,8 +67,8 @@ func (generator *ErlangGenerator) generateExpression(expression parser.Expressio
 	}
 
 	switch node := expression.(type) {
-	case *parser.NumberLiteral:
-		return generator.generateNumberLiteral(node)
+	case *parser.IntegerLiteral:
+		return generator.generateIntegerLiteral(node)
 	case *parser.Identifier:
 		return generator.generateIdentifier(node)
 	case *parser.BinaryExpression:
@@ -85,9 +85,9 @@ func (generator *ErlangGenerator) generateExpression(expression parser.Expressio
 	}
 }
 
-// generateNumberLiteral converts a number literal to Erlang
-func (generator *ErlangGenerator) generateNumberLiteral(number *parser.NumberLiteral) string {
-	return fmt.Sprintf("%d", number.Value)
+// generateIntegerLiteral converts a integer literal to Erlang
+func (generator *ErlangGenerator) generateIntegerLiteral(integer *parser.IntegerLiteral) string {
+	return fmt.Sprintf("%d", integer.Value)
 }
 
 // generateIdentifier converts an identifier to Erlang (uppercase for variables)

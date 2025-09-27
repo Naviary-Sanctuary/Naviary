@@ -33,10 +33,10 @@ const (
 
 // Token represents a lexical token
 type Token struct {
-	Type    TokenType
-	Literal string
-	Line    int
-	Column  int
+	Type   TokenType
+	Value  string
+	Line   int
+	Column int
 }
 
 // Keyword map for quick lookup

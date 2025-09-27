@@ -48,7 +48,7 @@ func (parser *Parser) ParseProgram() *Program {
 		} else {
 			parser.errors.Add(
 				errors.SyntaxError,
-				fmt.Sprintf("Expected 'func' at top level, got %s", parser.currentToken.Literal),
+				fmt.Sprintf("Expected 'func' at top level, got %s", parser.currentToken.Value),
 				parser.currentToken.Line,
 				parser.currentToken.Column,
 				parser.fileName,
@@ -84,7 +84,7 @@ func (parser *Parser) parseFunctionDeclaration() *FunctionDeclaration {
 		return nil
 	}
 
-	function.Name = parser.currentToken.Literal
+	function.Name = parser.currentToken.Value
 
 	// Expect '(' for parameter list
 	if !parser.expectPeek(lexer.LeftParen) {
@@ -126,7 +126,7 @@ func (parser *Parser) parseFunctionDeclaration() *FunctionDeclaration {
 
 // parseFunctionParameters parses the parameter list (empty for MVP)
 func (parser *Parser) parseFunctionParameters(function *FunctionDeclaration) bool {
-	// For MVP, we only support empty parameter list
+	// TODO: For MVP, we only support empty parameter list
 	if !parser.peekTokenIs(lexer.RightParen) {
 		parser.errors.Add(
 			errors.SyntaxError,
@@ -152,6 +152,10 @@ func (parser *Parser) validateMainFunction(program *Program) bool {
 		}
 	}
 
+	if mainCount == 1 {
+		return true
+	}
+
 	if mainCount == 0 {
 		parser.errors.Add(
 			errors.SyntaxError,
@@ -160,7 +164,6 @@ func (parser *Parser) validateMainFunction(program *Program) bool {
 			1,
 			parser.fileName,
 		)
-		return false
 	}
 
 	if mainCount > 1 {
@@ -171,10 +174,9 @@ func (parser *Parser) validateMainFunction(program *Program) bool {
 			1,
 			parser.fileName,
 		)
-		return false
 	}
 
-	return true
+	return false
 }
 
 // nextToken advances to the next token
@@ -219,17 +221,11 @@ func (parser *Parser) peekError(expectedType lexer.TokenType) {
 	)
 }
 
-// GetErrors returns accumulated parsing errors
-func (parser *Parser) GetErrors() *errors.ErrorCollector {
-	return parser.errors
-}
-
 // parsePrimaryExpression parses the simplest expressions: numbers, identifiers, grouped expressions
-
 func (parser *Parser) parsePrimaryExpression() Expression {
 	switch parser.currentToken.Type {
 	case lexer.Number:
-		return parser.parseNumberLiteral()
+		return parser.parseIntegerLiteral()
 	case lexer.Identifier:
 		return parser.parseIdentifier()
 	case lexer.Print: // print도 identifier처럼 처리
@@ -255,7 +251,7 @@ func (parser *Parser) parsePrimaryExpression() Expression {
 	default:
 		parser.errors.Add(
 			errors.SyntaxError,
-			fmt.Sprintf("Unexpected token in expression: %s", parser.currentToken.Literal),
+			fmt.Sprintf("Unexpected token in expression: %s", parser.currentToken.Value),
 			parser.currentToken.Line,
 			parser.currentToken.Column,
 			parser.fileName,
@@ -264,15 +260,15 @@ func (parser *Parser) parsePrimaryExpression() Expression {
 	}
 }
 
-// parseNumberLiteral parses an integer literal
-func (parser *Parser) parseNumberLiteral() Expression {
-	literal := &NumberLiteral{Token: parser.currentToken}
+// parseIntegerLiteral parses an integer literal
+func (parser *Parser) parseIntegerLiteral() Expression {
+	literal := &IntegerLiteral{Token: parser.currentToken}
 
-	value, err := strconv.ParseInt(parser.currentToken.Literal, 10, 64)
+	value, err := strconv.ParseInt(parser.currentToken.Value, 10, 64)
 	if err != nil {
 		parser.errors.Add(
 			errors.SyntaxError,
-			fmt.Sprintf("Could not parse %q as integer", parser.currentToken.Literal),
+			fmt.Sprintf("Could not parse %q as integer", parser.currentToken.Value),
 			parser.currentToken.Line,
 			parser.currentToken.Column,
 			parser.fileName,
@@ -294,7 +290,7 @@ func (parser *Parser) parseIdentifier() Expression {
 		// It's a function call
 		return &CallExpression{
 			Token:     identToken,
-			Function:  identToken.Literal,
+			Function:  identToken.Value,
 			Arguments: parser.parseCallArgumentsAfterIdentifier(),
 		}
 	}
@@ -302,7 +298,7 @@ func (parser *Parser) parseIdentifier() Expression {
 	// Just a regular identifier
 	return &Identifier{
 		Token: identToken,
-		Value: identToken.Literal,
+		Value: identToken.Value,
 	}
 }
 
@@ -345,45 +341,6 @@ func (parser *Parser) parseGroupedExpression() Expression {
 	}
 
 	return expression
-}
-
-// parseCallExpression parses function calls like print(x)
-func (parser *Parser) parseCallExpression() Expression {
-	call := &CallExpression{
-		Token:    parser.currentToken,
-		Function: parser.currentToken.Literal,
-	}
-
-	if !parser.expectPeek(lexer.LeftParen) {
-		return nil
-	}
-
-	call.Arguments = parser.parseCallArguments()
-
-	return call
-}
-
-// parseCallArguments parses the argument list of a function call
-func (parser *Parser) parseCallArguments() []Expression {
-	arguments := []Expression{}
-
-	// Empty argument list
-	if parser.peekTokenIs(lexer.RightParen) {
-		parser.nextToken()
-		return arguments
-	}
-
-	parser.nextToken() // move to first argument
-	arguments = append(arguments, parser.parseExpression())
-
-	// For MVP, we only support single argument
-	// Later we'll add comma-separated arguments
-
-	if !parser.expectPeek(lexer.RightParen) {
-		return nil
-	}
-
-	return arguments
 }
 
 // Operator precedence levels
@@ -459,7 +416,7 @@ func (parser *Parser) isBinaryOperator(tokenType lexer.TokenType) bool {
 func (parser *Parser) parseBinaryExpression(left Expression) Expression {
 	expression := &BinaryExpression{
 		Token:    parser.currentToken,
-		Operator: parser.currentToken.Literal,
+		Operator: parser.currentToken.Value,
 		Left:     left,
 	}
 
@@ -505,7 +462,7 @@ func (parser *Parser) parseLetStatement() Statement {
 		return nil
 	}
 
-	statement.Name = parser.currentToken.Literal
+	statement.Name = parser.currentToken.Value
 
 	// Expect '=' after identifier
 	if !parser.expectPeek(lexer.Assign) {

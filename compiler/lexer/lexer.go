@@ -1,6 +1,7 @@
 package lexer
 
 import (
+	"compiler/constants"
 	"compiler/errors"
 )
 
@@ -69,14 +70,14 @@ func (lexer *Lexer) NextToken() Token {
 		lexer.advance()
 	case 0:
 		token.Type = EOF
-		token.Literal = ""
+		token.Value = ""
 	default:
 		if isLetter(lexer.currentChar) {
-			token.Literal = lexer.readIdentifier()
-			token.Type = LookupIdentifier(token.Literal)
+			token.Value = lexer.readIdentifier()
+			token.Type = LookupIdentifier(token.Value)
 			return token // readIdentifier already advanced position
 		} else if isDigit(lexer.currentChar) {
-			token.Literal = lexer.readNumber()
+			token.Value = lexer.readNumber()
 			token.Type = Number
 			return token // readNumber already advanced position
 		} else {
@@ -108,7 +109,7 @@ func (lexer *Lexer) Tokenize() []Token {
 		}
 
 		// Stop if too many errors
-		if lexer.errors.Count() > 10 {
+		if lexer.errors.Count() > constants.MAX_LEXER_ERRORS {
 			tokens = append(tokens, Token{Type: EOF, Line: lexer.line, Column: lexer.column})
 			break
 		}
@@ -120,16 +121,11 @@ func (lexer *Lexer) Tokenize() []Token {
 // newToken creates a new token with the given type and character
 func (lexer *Lexer) newToken(tokenType TokenType, char byte) Token {
 	return Token{
-		Type:    tokenType,
-		Literal: string(char),
-		Line:    lexer.line,
-		Column:  lexer.column,
+		Type:   tokenType,
+		Value:  string(char),
+		Line:   lexer.line,
+		Column: lexer.column,
 	}
-}
-
-// GetErrors returns the accumulated errors
-func (lexer *Lexer) GetErrors() *errors.ErrorCollector {
-	return lexer.errors
 }
 
 // advances the lexer to the next character
@@ -151,30 +147,12 @@ func (lexer *Lexer) advance() {
 	}
 }
 
-// peekChar looks at the next character without advancing
-func (lexer *Lexer) peekChar() byte {
-	if lexer.readPosition >= len(lexer.input) {
-		return 0
-	}
-	return lexer.input[lexer.readPosition]
-}
-
 // skipWhitespace skips spaces, tabs, and newlines
 func (lexer *Lexer) skipWhitespace() {
 	for lexer.currentChar == ' ' || lexer.currentChar == '\t' ||
 		lexer.currentChar == '\n' || lexer.currentChar == '\r' {
 		lexer.advance()
 	}
-}
-
-// isLetter checks if a character can start an identifier
-func isLetter(char byte) bool {
-	return ('a' <= char && char <= 'z') || ('A' <= char && char <= 'Z') || char == '_'
-}
-
-// isDigit checks if a character is a digit
-func isDigit(char byte) bool {
-	return '0' <= char && char <= '9'
 }
 
 // readNumber reads a number from the input

@@ -2,6 +2,7 @@ package main
 
 import (
 	"compiler/codegen"
+	"compiler/constants"
 	"compiler/errors"
 	"compiler/lexer"
 	"compiler/parser"
@@ -40,13 +41,9 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 	program := parserInstance.ParseProgram()
 
 	// Transfer parser errors to main collector
-	if parserInstance.GetErrors().HasErrors() {
+	if errorCollector.HasErrors() {
 		errorCollector.Print()
 		return fmt.Errorf("compilation failed")
-	}
-
-	if program == nil {
-		return fmt.Errorf("parsing failed: nil program")
 	}
 
 	// Step 3: Code Generation
@@ -60,7 +57,7 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 	}
 
 	// Step 4: Write output file
-	outputPath := strings.TrimSuffix(inputPath, ".navi") + ".erl"
+	outputPath := strings.TrimSuffix(inputPath, constants.NAVIARY_EXTENSION) + constants.ERLANG_EXTENSION
 	err = os.WriteFile(outputPath, []byte(erlangCode), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write output file %s: %v", outputPath, err)
@@ -74,12 +71,12 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 		return err
 	}
 
-	beamFile := strings.TrimSuffix(outputPath, ".erl") + ".beam"
+	beamFile := strings.TrimSuffix(outputPath, constants.ERLANG_EXTENSION) + constants.BEAM_EXTENSION
 	fmt.Printf("✓ Compiled to %s\n", beamFile)
 
 	// Step 6: Run if requested
 	if runAfterCompile {
-		moduleName := strings.TrimSuffix(filepath.Base(inputPath), ".navi")
+		moduleName := strings.TrimSuffix(filepath.Base(inputPath), constants.NAVIARY_EXTENSION)
 		moduleDir := filepath.Dir(outputPath)
 		fmt.Println("\n--- Output ---")
 		return RunBeam(moduleName, moduleDir)
@@ -99,17 +96,17 @@ func main() {
 	}
 
 	if len(args) < 1 {
-		fmt.Println("Usage: naviary [run] <source_file.navi>")
-		fmt.Println("  naviary hello.navi       # Compile only")
-		fmt.Println("  naviary run hello.navi   # Compile and run")
+		fmt.Printf("Usage: naviary [run] <source_file%s>\n", constants.NAVIARY_EXTENSION)
+		fmt.Printf("  naviary hello%s       # Compile only\n", constants.NAVIARY_EXTENSION)
+		fmt.Printf("  naviary run hello%s   # Compile and run\n", constants.NAVIARY_EXTENSION)
 		os.Exit(1)
 	}
 
 	inputFile := args[0]
 
 	// Validate file extension
-	if !strings.HasSuffix(inputFile, ".navi") {
-		fmt.Printf("Error: Input file must have .navi extension\n")
+	if !strings.HasSuffix(inputFile, constants.NAVIARY_EXTENSION) {
+		fmt.Printf("Error: Input file must have %s extension\n", constants.NAVIARY_EXTENSION)
 		os.Exit(1)
 	}
 
