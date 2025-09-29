@@ -24,7 +24,7 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 	sourceStr := string(sourceCode)
 
 	// Create global error collector with source code
-	errorCollector := errors.NewErrorCollector(sourceStr, fileName)
+	errorCollector := errors.New(sourceStr, fileName)
 
 	// Step 1: Lexical Analysis
 	fmt.Printf("Compiling %s...\n", fileName)
@@ -32,17 +32,17 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 
 	// Transfer lexer errors to main collector
 	if errorCollector.HasErrors() {
-		errorCollector.Print()
+		errorCollector.Display()
 		return fmt.Errorf("compilation failed")
 	}
 
 	// Step 2: Parsing
-	parserInstance := parser.New(lexerInstance, fileName, errorCollector)
+	parserInstance := parser.New(lexerInstance, errorCollector)
 	program := parserInstance.ParseProgram()
 
 	// Transfer parser errors to main collector
 	if errorCollector.HasErrors() {
-		errorCollector.Print()
+		errorCollector.Display()
 		return fmt.Errorf("compilation failed")
 	}
 
@@ -51,7 +51,7 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 	erlangCode, err := generator.GenerateToFile(program)
 	if err != nil {
 		if errorCollector.HasErrors() {
-			errorCollector.Print()
+			errorCollector.Display()
 		}
 		return fmt.Errorf("code generation failed: %v", err)
 	}

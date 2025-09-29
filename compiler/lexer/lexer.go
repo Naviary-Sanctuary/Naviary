@@ -1,8 +1,8 @@
 package lexer
 
 import (
-	"compiler/constants"
 	"compiler/errors"
+	"compiler/token"
 )
 
 // Lexer tokenizes the input source code
@@ -31,101 +31,116 @@ func New(input string, fileName string, errorCollector *errors.ErrorCollector) *
 }
 
 // NextToken returns the next token from the input
-func (lexer *Lexer) NextToken() Token {
-	var token Token
+func (lexer *Lexer) NextToken() token.Token {
+	var t token.Token
 
 	lexer.skipWhitespace()
 
 	// Save current position for token
-	token.Line = lexer.line
-	token.Column = lexer.column
+	t.Line = lexer.line
+	t.Column = lexer.column
 
 	switch lexer.currentChar {
 	case '=':
-		token = lexer.newToken(Assign, lexer.currentChar)
+		t = token.New(token.ASSIGN, string(lexer.currentChar), lexer.line, lexer.column)
 		lexer.advance()
 	case '+':
-		token = lexer.newToken(Plus, lexer.currentChar)
+		t = token.New(token.PLUS, string(lexer.currentChar), lexer.line, lexer.column)
 		lexer.advance()
 	case '-':
-		token = lexer.newToken(Minus, lexer.currentChar)
-		lexer.advance()
+		if lexer.peek() == '>' {
+			startColumn := lexer.column
+			lexer.advance() // consume '-'
+			lexer.advance() // consume '>'
+			t = token.New(token.ARROW, "->", lexer.line, startColumn)
+		} else {
+			t = token.New(token.MINUS, string(lexer.currentChar), lexer.line, lexer.column)
+			lexer.advance()
+		}
 	case '*':
-		token = lexer.newToken(Asterisk, lexer.currentChar)
+		t = token.New(token.ASTERISK, string(lexer.currentChar), lexer.line, lexer.column)
 		lexer.advance()
 	case '/':
-		token = lexer.newToken(Slash, lexer.currentChar)
+		t = token.New(token.SLASH, string(lexer.currentChar), lexer.line, lexer.column)
 		lexer.advance()
 	case '(':
-		token = lexer.newToken(LeftParen, lexer.currentChar)
+		t = token.New(token.LEFT_PAREN, string(lexer.currentChar), lexer.line, lexer.column)
 		lexer.advance()
 	case ')':
-		token = lexer.newToken(RightParen, lexer.currentChar)
+		t = token.New(token.RIGHT_PAREN, string(lexer.currentChar), lexer.line, lexer.column)
 		lexer.advance()
 	case '{':
-		token = lexer.newToken(LeftBrace, lexer.currentChar)
+		t = token.New(token.LEFT_BRACE, string(lexer.currentChar), lexer.line, lexer.column)
 		lexer.advance()
 	case '}':
-		token = lexer.newToken(RightBrace, lexer.currentChar)
+		t = token.New(token.RIGHT_BRACE, string(lexer.currentChar), lexer.line, lexer.column)
 		lexer.advance()
+	case ',':
+		t = token.New(token.COMMA, string(lexer.currentChar), lexer.line, lexer.column)
+		lexer.advance()
+	case ';':
+		t = token.New(token.SEMICOLON, string(lexer.currentChar), lexer.line, lexer.column)
+		lexer.advance()
+	case ':':
+		// Check for := (colon assign)
+		if lexer.peek() == '=' {
+			startColumn := lexer.column
+			lexer.advance() // consume ':'
+			lexer.advance() // consume '='
+			t = token.New(token.COLON_ASSIGN, ":=", lexer.line, startColumn)
+		} else {
+			t = token.New(token.COLON, string(lexer.currentChar), lexer.line, lexer.column)
+			lexer.advance()
+		}
 	case 0:
-		token.Type = EOF
-		token.Value = ""
+		t.Type = token.EOF
+		t.Value = ""
 	default:
 		if isLetter(lexer.currentChar) {
-			token.Value = lexer.readIdentifier()
-			token.Type = LookupIdentifier(token.Value)
-			return token // readIdentifier already advanced position
+			t.Value = lexer.readIdentifier()
+			t.Type = token.LookupIdentifier(t.Value)
+			return t // readIdentifier already advanced position
 		} else if isDigit(lexer.currentChar) {
-			token.Value = lexer.readNumber()
-			token.Type = Number
-			return token // readNumber already advanced position
+			t.Value = lexer.readNumber()
+			t.Type = token.INT
+			return t // readNumber already advanced position
 		} else {
-			token = lexer.newToken(Illegal, lexer.currentChar)
+			t = token.New(token.ILLEGAL, string(lexer.currentChar), lexer.line, lexer.column)
 			lexer.errors.Add(
 				errors.LexicalError,
-				"Unexpected character: "+string(lexer.currentChar),
 				lexer.line,
 				lexer.column,
-				lexer.fileName,
+				len(string(lexer.currentChar)),
+				"Unexpected character: %s",
+				string(lexer.currentChar),
 			)
 			lexer.advance()
 		}
 	}
 
-	return token
+	return t
 }
 
 // Tokenize processes the entire input and returns all tokens
-func (lexer *Lexer) Tokenize() []Token {
-	var tokens []Token
+func (lexer *Lexer) Tokenize() []token.Token {
+	var tokens []token.Token
 
 	for {
-		token := lexer.NextToken()
-		tokens = append(tokens, token)
+		t := lexer.NextToken()
+		tokens = append(tokens, t)
 
-		if token.Type == EOF {
+		if t.Type == token.EOF {
 			break
 		}
 
 		// Stop if too many errors
-		if lexer.errors.Count() > constants.MAX_LEXER_ERRORS {
-			tokens = append(tokens, Token{Type: EOF, Line: lexer.line, Column: lexer.column})
+		if lexer.errors.HasErrors() {
+			tokens = append(tokens, token.Token{Type: token.EOF, Line: lexer.line, Column: lexer.column})
 			break
 		}
 	}
 
 	return tokens
-}
-
-// newToken creates a new token with the given type and character
-func (lexer *Lexer) newToken(tokenType TokenType, char byte) Token {
-	return Token{
-		Type:   tokenType,
-		Value:  string(char),
-		Line:   lexer.line,
-		Column: lexer.column,
-	}
 }
 
 // advances the lexer to the next character
@@ -158,7 +173,6 @@ func (lexer *Lexer) skipWhitespace() {
 // readNumber reads a number from the input
 func (lexer *Lexer) readNumber() string {
 	startPosition := lexer.position
-	startColumn := lexer.column
 
 	// Read all consecutive digits
 	for isDigit(lexer.currentChar) {
@@ -174,10 +188,11 @@ func (lexer *Lexer) readNumber() string {
 		invalidToken := lexer.input[startPosition:lexer.position]
 		lexer.errors.Add(
 			errors.LexicalError,
-			"Invalid number format: "+invalidToken,
 			lexer.line,
-			startColumn,
-			lexer.fileName,
+			lexer.column,
+			len(invalidToken),
+			"Invalid number format: %s",
+			invalidToken,
 		)
 		return invalidToken
 	}
@@ -203,4 +218,12 @@ func (lexer *Lexer) readIdentifier() string {
 	}
 
 	return lexer.input[startPosition:lexer.position]
+}
+
+func (lexer *Lexer) peek() byte {
+	if lexer.readPosition >= len(lexer.input) {
+		return 0
+	}
+
+	return lexer.input[lexer.readPosition]
 }

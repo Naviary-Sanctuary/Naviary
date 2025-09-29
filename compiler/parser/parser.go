@@ -1,536 +1,447 @@
 package parser
 
 import (
+	"compiler/ast"
 	"compiler/errors"
 	"compiler/lexer"
-	"fmt"
-	"strconv"
+	"compiler/token"
 )
 
 // Parser analyzes tokens and builds an AST
 type Parser struct {
-	lexer        *lexer.Lexer
-	errors       *errors.ErrorCollector
-	currentToken lexer.Token
-	peekToken    lexer.Token
-	fileName     string
+	lexer          *lexer.Lexer
+	currentToken   token.Token
+	peekToken      token.Token
+	errorCollector *errors.ErrorCollector
 }
 
-// New creates a new Parser instance
-func New(lexerInstance *lexer.Lexer, fileName string, errorCollector *errors.ErrorCollector) *Parser {
+func New(lexer *lexer.Lexer, errorCollector *errors.ErrorCollector) *Parser {
 	parser := &Parser{
-		lexer:    lexerInstance,
-		errors:   errorCollector,
-		fileName: fileName,
+		lexer:          lexer,
+		errorCollector: errorCollector,
 	}
 
-	// Read two tokens to set currentToken and peekToken
-	parser.nextToken()
-	parser.nextToken()
+	parser.advance()
+	parser.advance()
 
 	return parser
 }
 
-// ParseProgram parses the entire program
-func (parser *Parser) ParseProgram() *Program {
-	program := &Program{
-		Functions: []FunctionDeclaration{},
+func (parser *Parser) advance() {
+	parser.currentToken = parser.peekToken
+	parser.peekToken = parser.lexer.NextToken()
+}
+
+func (parser *Parser) ParseProgram() *ast.Program {
+	program := &ast.Program{
+		Statements: []ast.Statement{},
 	}
 
-	// Parse all functions until EOF
-	for !parser.currentTokenIs(lexer.EOF) {
-		// Only function declarations are allowed at top level
-		if parser.currentTokenIs(lexer.Func) {
-			function := parser.parseFunctionDeclaration()
-			if function != nil {
-				program.Functions = append(program.Functions, *function)
-			}
-		} else {
-			parser.errors.Add(
-				errors.SyntaxError,
-				fmt.Sprintf("Expected 'func' at top level, got %s", parser.currentToken.Value),
-				parser.currentToken.Line,
-				parser.currentToken.Column,
-				parser.fileName,
-			)
-			parser.nextToken() // Skip invalid token to continue parsing
+	for parser.currentToken.Type != token.EOF {
+		if parser.currentToken.Type == token.NEW_LINE {
+			parser.advance()
+			continue
 		}
-	}
 
-	// Validate that we have exactly one main function for MVP
-	if !parser.validateMainFunction(program) {
-		return nil
+		statement := parser.parseStatement()
+
+		if statement != nil {
+			program.Statements = append(program.Statements, statement)
+		}
+
+		if parser.currentToken.Type != token.EOF && parser.currentToken.Type != token.NEW_LINE {
+			parser.advance()
+		}
 	}
 
 	return program
 }
 
-// parseFunctionDeclaration parses 'func name() { body }'
-func (parser *Parser) parseFunctionDeclaration() *FunctionDeclaration {
-	function := &FunctionDeclaration{
-		Token:      parser.currentToken,
-		Parameters: []string{}, // Empty for MVP
+func (parser *Parser) parseStatement() ast.Statement {
+	switch parser.currentToken.Type {
+	case token.LET:
+		return parser.parseLetStatement()
+	case token.FUNC:
+		return parser.parseFunctionStatement()
+	case token.RETURN:
+		return parser.parseReturnStatement()
+	case token.IDENTIFIER:
+		return parser.parseExpressionStatement()
+	default:
+		return nil
+	}
+}
+
+func (parser *Parser) parseLetStatement() ast.Statement {
+	letToken := parser.currentToken
+
+	isMutable := false
+
+	if parser.peekToken.Type == token.MUT {
+		parser.advance() // advance to mut
+		isMutable = true
 	}
 
-	// Expect function name
-	if !parser.expectPeek(lexer.Identifier) {
-		parser.errors.Add(
-			errors.SyntaxError,
-			"Expected function name after 'func'",
-			parser.peekToken.Line,
-			parser.peekToken.Column,
-			parser.fileName,
-		)
+	parser.advance() // advance to identifier
+
+	name := &ast.Identifier{
+		Token: parser.currentToken,
+		Value: parser.currentToken.Value,
+	}
+
+	parser.advance() // advance to assignment operator
+
+	switch parser.currentToken.Type {
+	case token.COLON_ASSIGN:
+		isMutable = true
+		parser.advance()
+	case token.ASSIGN:
+		parser.advance()
+	default:
+		parser.errorCollector.Add(errors.SyntaxError, parser.peekToken.Line, parser.peekToken.Column, len(parser.peekToken.Value), "Expected := or =, got %s", parser.peekToken.Type.String())
 		return nil
 	}
 
-	function.Name = parser.currentToken.Value
+	value := parser.parseExpression(LOWEST)
 
-	// Expect '(' for parameter list
-	if !parser.expectPeek(lexer.LeftParen) {
-		parser.errors.Add(
-			errors.SyntaxError,
-			fmt.Sprintf("Expected '(' after function name '%s'", function.Name),
-			parser.peekToken.Line,
-			parser.peekToken.Column,
-			parser.fileName,
-		)
+	statement := &ast.LetStatement{
+		Token:   letToken,
+		Name:    name,
+		Value:   value,
+		Mutable: isMutable,
+	}
+
+	parser.skipEndOfStatement()
+
+	return statement
+}
+
+func (parser *Parser) parseFunctionStatement() ast.Statement {
+	function := &ast.FunctionStatement{
+		Token: parser.currentToken,
+	}
+
+	if !parser.expectPeek(token.IDENTIFIER) {
 		return nil
 	}
 
-	// Parse parameters (empty for MVP)
-	if !parser.parseFunctionParameters(function) {
+	parser.advance() // consume func
+
+	function.Name = &ast.Identifier{
+		Token: parser.currentToken,
+		Value: parser.currentToken.Value,
+	}
+
+	parser.advance() // consume function name
+	if !parser.expect(token.LEFT_PAREN) {
 		return nil
 	}
 
-	// Expect '{' for function body
-	if !parser.expectPeek(lexer.LeftBrace) {
-		parser.errors.Add(
-			errors.SyntaxError,
-			fmt.Sprintf("Expected '{{' to start function body of '%s'", function.Name),
-			parser.peekToken.Line,
-			parser.peekToken.Column,
-			parser.fileName,
-		)
+	function.Parameters = parser.parseFunctionParameters()
+
+	if parser.peekToken.Type == token.ARROW {
+		parser.advance()
+		parser.advance() // consume '->'
+
+		if !parser.expect(token.IDENTIFIER) {
+			return nil
+		}
+
+		function.ReturnType = &ast.TypeAnnotation{
+			Token: parser.currentToken,
+			Value: parser.currentToken.Value,
+		}
+
+		parser.advance() // consume return type
+	}
+
+	if !parser.expect(token.LEFT_BRACE) {
 		return nil
 	}
 
-	// Parse function body
-	function.Body = *parser.parseBlockStatement()
+	function.Body = parser.parseBlockStatement()
 
-	// Move past the closing '}'
-	parser.nextToken()
+	if function.Body == nil {
+		return nil
+	}
 
 	return function
 }
 
-// parseFunctionParameters parses the parameter list (empty for MVP)
-func (parser *Parser) parseFunctionParameters(function *FunctionDeclaration) bool {
-	// TODO: For MVP, we only support empty parameter list
-	if !parser.peekTokenIs(lexer.RightParen) {
-		parser.errors.Add(
-			errors.SyntaxError,
-			"MVP only supports functions without parameters",
-			parser.peekToken.Line,
-			parser.peekToken.Column,
-			parser.fileName,
-		)
-		return false
+func (parser *Parser) parseFunctionParameters() []*ast.FunctionParameter {
+	parameters := []*ast.FunctionParameter{}
+
+	if parser.peekToken.Type == token.RIGHT_PAREN {
+		parser.advance()
+		parser.advance() // consume '()'
+		return parameters
 	}
 
-	parser.nextToken() // consume ')'
-	return true
+	parser.advance() // consume '('
+
+	for {
+		if !parser.expect(token.IDENTIFIER) {
+			return nil
+		}
+
+		parameter := &ast.FunctionParameter{
+			Name: &ast.Identifier{
+				Token: parser.currentToken,
+				Value: parser.currentToken.Value,
+			},
+		}
+
+		parser.advance() // consume parameter name
+
+		parameterType := parser.parseTypeAnnotation()
+		if parameterType == nil {
+			return nil
+		}
+
+		parameter.Type = *parameterType
+		parameters = append(parameters, parameter)
+
+		if parser.currentToken.Type == token.COMMA {
+			parser.advance() // consume comma
+			continue
+		}
+		if !parser.expect(token.RIGHT_PAREN) {
+			return nil
+		}
+
+		break
+	}
+
+	parser.advance() // consume ')'
+
+	return parameters
 }
 
-// validateMainFunction checks if program has exactly one main function
-func (parser *Parser) validateMainFunction(program *Program) bool {
-	mainCount := 0
+func (parser *Parser) parseBlockStatement() *ast.BlockStatement {
+	block := &ast.BlockStatement{
+		Token: parser.currentToken,
+	}
 
-	for _, function := range program.Functions {
-		if function.Name == "main" {
-			mainCount++
+	parser.advance() // consume '{'
+
+	for parser.currentToken.Type != token.RIGHT_BRACE && parser.currentToken.Type != token.EOF {
+		if parser.currentToken.Type == token.NEW_LINE {
+			parser.advance()
+			continue
+		}
+
+		statement := parser.parseStatement()
+		if statement != nil {
+			block.Statements = append(block.Statements, statement)
+		}
+
+		if parser.currentToken.Type != token.RIGHT_BRACE && parser.currentToken.Type != token.EOF {
+			parser.advance()
 		}
 	}
 
-	if mainCount == 1 {
-		return true
-	}
-
-	if mainCount == 0 {
-		parser.errors.Add(
-			errors.SyntaxError,
-			"Program must have a 'main' function",
-			1,
-			1,
-			parser.fileName,
-		)
-	}
-
-	if mainCount > 1 {
-		parser.errors.Add(
-			errors.SyntaxError,
-			"Program cannot have multiple 'main' functions",
-			1,
-			1,
-			parser.fileName,
-		)
-	}
-
-	return false
-}
-
-// nextToken advances to the next token
-func (parser *Parser) nextToken() {
-	parser.currentToken = parser.peekToken
-	parser.peekToken = parser.lexer.NextToken()
-}
-
-// currentTokenIs checks if current token is of given type
-func (parser *Parser) currentTokenIs(tokenType lexer.TokenType) bool {
-	return parser.currentToken.Type == tokenType
-}
-
-// peekTokenIs checks if peek token is of given type
-func (parser *Parser) peekTokenIs(tokenType lexer.TokenType) bool {
-	return parser.peekToken.Type == tokenType
-}
-
-// expectPeek advances if peek token matches, otherwise adds error
-func (parser *Parser) expectPeek(tokenType lexer.TokenType) bool {
-	if parser.peekTokenIs(tokenType) {
-		parser.nextToken()
-		return true
-	}
-
-	parser.peekError(tokenType)
-	return false
-}
-
-// peekError adds an error for unexpected token
-func (parser *Parser) peekError(expectedType lexer.TokenType) {
-	message := fmt.Sprintf("Expected %v, got %v",
-		expectedType,
-		parser.peekToken.Type)
-
-	parser.errors.Add(
-		errors.SyntaxError,
-		message,
-		parser.peekToken.Line,
-		parser.peekToken.Column,
-		parser.fileName,
-	)
-}
-
-// parsePrimaryExpression parses the simplest expressions: numbers, identifiers, grouped expressions
-func (parser *Parser) parsePrimaryExpression() Expression {
-	switch parser.currentToken.Type {
-	case lexer.Number:
-		return parser.parseIntegerLiteral()
-	case lexer.Identifier:
-		return parser.parseIdentifier()
-	case lexer.Print: // print도 identifier처럼 처리
-		// print는 특별한 built-in 함수
-		if parser.peekTokenIs(lexer.LeftParen) {
-			return &CallExpression{
-				Token:     parser.currentToken,
-				Function:  "print",
-				Arguments: parser.parseCallArgumentsAfterIdentifier(),
-			}
-		}
-		// print 다음에 (가 없으면 에러
-		parser.errors.Add(
-			errors.SyntaxError,
-			"Expected '(' after 'print'",
-			parser.peekToken.Line,
-			parser.peekToken.Column,
-			parser.fileName,
-		)
-		return nil
-	case lexer.LeftParen:
-		return parser.parseGroupedExpression()
-	default:
-		parser.errors.Add(
-			errors.SyntaxError,
-			fmt.Sprintf("Unexpected token in expression: %s", parser.currentToken.Value),
-			parser.currentToken.Line,
-			parser.currentToken.Column,
-			parser.fileName,
-		)
-		return nil
-	}
-}
-
-// parseIntegerLiteral parses an integer literal
-func (parser *Parser) parseIntegerLiteral() Expression {
-	literal := &IntegerLiteral{Token: parser.currentToken}
-
-	value, err := strconv.ParseInt(parser.currentToken.Value, 10, 64)
-	if err != nil {
-		parser.errors.Add(
-			errors.SyntaxError,
-			fmt.Sprintf("Could not parse %q as integer", parser.currentToken.Value),
-			parser.currentToken.Line,
-			parser.currentToken.Column,
-			parser.fileName,
-		)
+	if !parser.expect(token.RIGHT_BRACE) {
 		return nil
 	}
 
-	literal.Value = value
-	return literal
+	parser.advance() // consume '}'
+	return block
 }
 
-// parseIdentifier parses a variable name or function call
-func (parser *Parser) parseIdentifier() Expression {
-	// Save current identifier token
-	identToken := parser.currentToken
-
-	// Check if this is a function call (including 'print')
-	if parser.peekTokenIs(lexer.LeftParen) {
-		// It's a function call
-		return &CallExpression{
-			Token:     identToken,
-			Function:  identToken.Value,
-			Arguments: parser.parseCallArgumentsAfterIdentifier(),
-		}
+func (parser *Parser) parseExpressionStatement() ast.Statement {
+	statement := &ast.ExpressionStatement{
+		Token:      parser.currentToken,
+		Expression: parser.parseExpression(LOWEST),
 	}
 
-	// Just a regular identifier
-	return &Identifier{
-		Token: identToken,
-		Value: identToken.Value,
-	}
+	parser.skipEndOfStatement()
+
+	return statement
 }
 
-// parseCallArgumentsAfterIdentifier parses arguments after we've seen identifier(
-func (parser *Parser) parseCallArgumentsAfterIdentifier() []Expression {
-	parser.nextToken() // consume the identifier to get to '('
-
-	if !parser.currentTokenIs(lexer.LeftParen) {
-		return nil
+func (parser *Parser) parseReturnStatement() ast.Statement {
+	returnStatement := &ast.ReturnStatement{
+		Token: parser.currentToken,
 	}
 
-	arguments := []Expression{}
+	parser.advance()
 
-	// Empty argument list
-	if parser.peekTokenIs(lexer.RightParen) {
-		parser.nextToken() // consume ')'
-		return arguments
-	}
+	returnStatement.ReturnValue = parser.parseExpression(LOWEST)
 
-	parser.nextToken() // move to first argument
-	arguments = append(arguments, parser.parseExpression())
+	parser.skipEndOfStatement()
 
-	// For MVP, we only support single argument
+	return returnStatement
 
-	if !parser.expectPeek(lexer.RightParen) {
-		return nil
-	}
-
-	return arguments
 }
 
-// parseGroupedExpression parses expressions in parentheses: (expression)
-func (parser *Parser) parseGroupedExpression() Expression {
-	parser.nextToken() // consume '('
-
-	expression := parser.parseExpression()
-
-	if !parser.expectPeek(lexer.RightParen) {
-		return nil
-	}
-
-	return expression
-}
-
-// Operator precedence levels
-const (
-	LOWEST         = 1
-	ADDITIVE       = 2 // + -
-	MULTIPLICATIVE = 3 // * /
-)
-
-// precedenceMap defines operator precedence
-var precedenceMap = map[lexer.TokenType]int{
-	lexer.Plus:     ADDITIVE,
-	lexer.Minus:    ADDITIVE,
-	lexer.Asterisk: MULTIPLICATIVE,
-	lexer.Slash:    MULTIPLICATIVE,
-}
-
-// peekPrecedence returns the precedence of the peek token
-func (parser *Parser) peekPrecedence() int {
-	if precedence, ok := precedenceMap[parser.peekToken.Type]; ok {
-		return precedence
-	}
-	return LOWEST
-}
-
-// currentPrecedence returns the precedence of the current token
-func (parser *Parser) currentPrecedence() int {
-	if precedence, ok := precedenceMap[parser.currentToken.Type]; ok {
-		return precedence
-	}
-	return LOWEST
-}
-
-// parseExpression parses expressions with operator precedence (Pratt parsing)
-func (parser *Parser) parseExpression() Expression {
-	return parser.parseExpressionWithPrecedence(LOWEST)
-}
-
-// parseExpressionWithPrecedence implements Pratt parser algorithm
-func (parser *Parser) parseExpressionWithPrecedence(precedence int) Expression {
-	// Parse left side (prefix/primary expression)
-	left := parser.parsePrimaryExpression()
+func (parser *Parser) parseExpression(precedence int) ast.Expression {
+	left := parser.parseAtom()
 	if left == nil {
 		return nil
 	}
 
-	// Keep parsing while we have higher precedence operators
-	for !parser.peekTokenIs(lexer.EOF) && precedence < parser.peekPrecedence() {
-		// Check if next token is a binary operator
-		if !parser.isBinaryOperator(parser.peekToken.Type) {
-			return left
+	for !parser.isStatementEnd() && precedence < getPrecedence(parser.peekToken.Type) {
+
+		if parser.peekToken.Type == token.LEFT_PAREN {
+			parser.advance() // advance to '('
+			left = parser.parseCallExpression(left)
+			continue
 		}
 
-		parser.nextToken()
-		left = parser.parseBinaryExpression(left)
-		if left == nil {
+		if !parser.peekToken.Type.IsOperator() {
+			break
+		}
+
+		operatorToken := parser.peekToken
+		operatorPrecedence := getPrecedence(operatorToken.Type)
+
+		parser.advance()
+		parser.advance() // advance to right operand
+
+		right := parser.parseExpression(operatorPrecedence)
+		if right == nil {
 			return nil
+		}
+
+		left = &ast.BinaryExpression{
+			Token:    operatorToken,
+			Left:     left,
+			Operator: operatorToken.Value,
+			Right:    right,
 		}
 	}
 
 	return left
 }
 
-// isBinaryOperator checks if token is a binary operator
-func (parser *Parser) isBinaryOperator(tokenType lexer.TokenType) bool {
-	return tokenType == lexer.Plus ||
-		tokenType == lexer.Minus ||
-		tokenType == lexer.Asterisk ||
-		tokenType == lexer.Slash
-}
-
-// parseBinaryExpression parses binary operations like a + b
-func (parser *Parser) parseBinaryExpression(left Expression) Expression {
-	expression := &BinaryExpression{
-		Token:    parser.currentToken,
-		Operator: parser.currentToken.Value,
-		Left:     left,
+func (parser *Parser) parseCallExpression(function ast.Expression) ast.Expression {
+	call := &ast.CallExpression{
+		Token:     parser.currentToken,
+		Function:  function,
+		Arguments: []ast.Expression{},
 	}
 
-	precedence := parser.currentPrecedence()
-	parser.nextToken()
+	call.Arguments = parser.parseCallArguments()
 
-	// Parse right side with higher precedence
-	// This ensures correct associativity
-	expression.Right = parser.parseExpressionWithPrecedence(precedence)
+	return call
+}
 
-	if expression.Right == nil {
+func (parser *Parser) parseCallArguments() []ast.Expression {
+	arguments := []ast.Expression{}
+
+	if parser.peekToken.Type == token.RIGHT_PAREN {
+		parser.advance() // consume ')'
+		return arguments
+	}
+
+	parser.advance() // consume '('
+	arguments = append(arguments, parser.parseExpression(LOWEST))
+
+	for parser.peekToken.Type == token.COMMA {
+		parser.advance() // consume argument
+		parser.advance() // consume comma
+
+		arguments = append(arguments, parser.parseExpression(LOWEST))
+	}
+	if !parser.expectPeek(token.RIGHT_PAREN) {
 		return nil
 	}
 
-	return expression
+	parser.advance() // consume ')'
+
+	return arguments
 }
 
-// parseStatement parses different types of statements
-func (parser *Parser) parseStatement() Statement {
+func (parser *Parser) skipEndOfStatement() {
+	if parser.peekToken.Type == token.SEMICOLON || parser.peekToken.Type == token.NEW_LINE {
+		parser.advance()
+	}
+}
+
+// parseAtom parses an literals and identifiers
+func (parser *Parser) parseAtom() ast.Expression {
 	switch parser.currentToken.Type {
-	case lexer.Let:
-		return parser.parseLetStatement()
-	case lexer.LeftBrace:
-		return parser.parseBlockStatement()
-	default:
-		return parser.parseExpressionStatement()
-	}
-}
-
-// parseLetStatement parses 'let identifier = expression'
-func (parser *Parser) parseLetStatement() Statement {
-	statement := &LetStatement{Token: parser.currentToken}
-
-	// Expect identifier after 'let'
-	if !parser.expectPeek(lexer.Identifier) {
-		parser.errors.Add(
-			errors.SyntaxError,
-			"Expected identifier after 'let'",
-			parser.peekToken.Line,
-			parser.peekToken.Column,
-			parser.fileName,
-		)
-		return nil
-	}
-
-	statement.Name = parser.currentToken.Value
-
-	// Expect '=' after identifier
-	if !parser.expectPeek(lexer.Assign) {
-		parser.errors.Add(
-			errors.SyntaxError,
-			fmt.Sprintf("Expected '=' after identifier '%s'", statement.Name),
-			parser.peekToken.Line,
-			parser.peekToken.Column,
-			parser.fileName,
-		)
-		return nil
-	}
-
-	// Move to the expression
-	parser.nextToken()
-
-	// Parse the value expression
-	statement.Value = parser.parseExpression()
-	if statement.Value == nil {
-		return nil
-	}
-
-	return statement
-}
-
-// parseBlockStatement parses { statements... }
-func (parser *Parser) parseBlockStatement() *BlockStatement {
-	block := &BlockStatement{
-		Token:      parser.currentToken,
-		Statements: []Statement{},
-	}
-
-	parser.nextToken() // consume '{'
-
-	// Parse statements until we hit '}' or EOF
-	for !parser.currentTokenIs(lexer.RightBrace) && !parser.currentTokenIs(lexer.EOF) {
-		statement := parser.parseStatement()
-		if statement != nil {
-			block.Statements = append(block.Statements, statement)
+	case token.INT:
+		return &ast.IntegerLiteral{
+			Token: parser.currentToken,
+			Value: parser.currentToken.Value,
 		}
-		parser.nextToken()
-	}
-
-	// Check if we properly closed the block
-	if !parser.currentTokenIs(lexer.RightBrace) {
-		parser.errors.Add(
-			errors.SyntaxError,
-			"Expected '}' to close block",
+	case token.IDENTIFIER:
+		return &ast.Identifier{
+			Token: parser.currentToken,
+			Value: parser.currentToken.Value,
+		}
+	default:
+		parser.errorCollector.Add(errors.SyntaxError,
 			parser.currentToken.Line,
 			parser.currentToken.Column,
-			parser.fileName,
+			len(parser.currentToken.Value),
+			"Unexpected token '%s' in expression",
+			parser.currentToken.Type.String(),
 		)
 		return nil
 	}
-
-	return block
 }
 
-// parseExpressionStatement parses an expression used as a statement
-func (parser *Parser) parseExpressionStatement() Statement {
-	statement := &ExpressionStatement{
-		Token: parser.currentToken,
+func (parser *Parser) isStatementEnd() bool {
+	if parser.currentToken.Type == token.SEMICOLON || parser.currentToken.Type == token.NEW_LINE || parser.currentToken.Type == token.EOF {
+		return true
 	}
 
-	statement.Expression = parser.parseExpression()
-	if statement.Expression == nil {
+	return false
+}
+
+func (parser *Parser) expectPeek(tokenType token.TokenType) bool {
+	if parser.peekToken.Type == tokenType {
+		return true
+	}
+
+	parser.errorCollector.Add(
+		errors.SyntaxError,
+		parser.peekToken.Line,
+		parser.peekToken.Column,
+		len(parser.peekToken.Value),
+		"expected %s, got %s",
+		tokenType.String(),
+		parser.peekToken.Type.String(),
+	)
+
+	return false
+}
+
+func (parser *Parser) expect(tokenType token.TokenType) bool {
+	if parser.currentToken.Type == tokenType {
+		return true
+	}
+
+	parser.errorCollector.Add(errors.SyntaxError,
+		parser.currentToken.Line,
+		parser.currentToken.Column,
+		len(parser.currentToken.Value),
+		"expected %s, got %s",
+		tokenType.String(),
+		parser.currentToken.Type.String(),
+	)
+	return false
+}
+
+func (parser *Parser) parseTypeAnnotation() *ast.TypeAnnotation {
+	if !parser.expect(token.COLON) {
 		return nil
 	}
 
-	return statement
+	parser.advance() // consume ':'
+
+	if !parser.expect(token.IDENTIFIER) {
+		return nil
+	}
+
+	typeAnnotation := &ast.TypeAnnotation{
+		Token: parser.currentToken,
+		Value: parser.currentToken.Value,
+	}
+
+	parser.advance() // consume type
+
+	return typeAnnotation
 }
