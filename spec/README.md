@@ -766,13 +766,13 @@ match value {
 ```naviary
 enum Result<T, E> {
     Ok(T),    // Success value
-    Err(E)    // Error value
+    Error(E)    // Error value
 }
 
 // Basic usage
 func divide(a: int, b: int) -> Result<int, string> {
     if b == 0 {
-        Err("Division by zero")
+        Error("Division by zero")
     } else {
         Ok(a / b)
     }
@@ -784,7 +784,7 @@ let result = divide(10, 2)
 // Handle with pattern matching
 match result {
     Ok(value) => print("Result: {value}"),
-    Err(error) => print("Error: {error}")
+    Error(error) => print("Error: {error}")
 }
 
 // Simplified with if let
