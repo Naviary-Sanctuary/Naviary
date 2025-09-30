@@ -92,6 +92,9 @@ func (lexer *Lexer) NextToken() token.Token {
 			t = token.New(token.COLON, string(lexer.currentChar), lexer.line, lexer.column)
 			lexer.advance()
 		}
+	case '\n':
+		t = token.New(token.NEW_LINE, string(lexer.currentChar), lexer.line, lexer.column)
+		lexer.advance()
 	case 0:
 		t.Type = token.EOF
 		t.Value = ""
@@ -164,8 +167,7 @@ func (lexer *Lexer) advance() {
 
 // skipWhitespace skips spaces, tabs, and newlines
 func (lexer *Lexer) skipWhitespace() {
-	for lexer.currentChar == ' ' || lexer.currentChar == '\t' ||
-		lexer.currentChar == '\n' || lexer.currentChar == '\r' {
+	for lexer.currentChar == ' ' || lexer.currentChar == '\t' || lexer.currentChar == '\r' {
 		lexer.advance()
 	}
 }

@@ -8,14 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type SingleTokenTestCase struct {
+type singleTokenTestCase struct {
 	name          string
 	input         string
 	expectedType  token.TokenType
 	expectedValue string
 }
 
-type MultipleTokenTestCase struct {
+type multipleTokenTestCase struct {
 	name           string
 	input          string
 	expectedTokens []struct {
@@ -26,7 +26,7 @@ type MultipleTokenTestCase struct {
 
 func TestLexer(t *testing.T) {
 	t.Run("Test single tokens", func(t *testing.T) {
-		tests := []SingleTokenTestCase{
+		tests := []singleTokenTestCase{
 			{
 				name:          "Plus Operator",
 				input:         "+",
@@ -172,7 +172,7 @@ func TestLexer(t *testing.T) {
 	})
 
 	t.Run("Test keywords", func(t *testing.T) {
-		tests := []SingleTokenTestCase{
+		tests := []singleTokenTestCase{
 			{
 				name:          "let keyword",
 				input:         "let",
@@ -219,7 +219,7 @@ func TestLexer(t *testing.T) {
 	})
 
 	t.Run("Test Compound tokens", func(t *testing.T) {
-		tests := []SingleTokenTestCase{
+		tests := []singleTokenTestCase{
 			{
 				name:          "Arrow token",
 				input:         "->",
@@ -250,7 +250,7 @@ func TestLexer(t *testing.T) {
 	})
 
 	t.Run("Test complex  expressions", func(t *testing.T) {
-		tests := []MultipleTokenTestCase{
+		tests := []multipleTokenTestCase{
 			{
 				name:  "Variable declaration",
 				input: "let x = 1 + 2",
@@ -376,9 +376,192 @@ func TestLexer(t *testing.T) {
 						"Token %d: value mismatch", index)
 				}
 
-				// Verify no errors occurred
 				assert.False(t, errorCollector.HasErrors(),
 					"Lexer should not produce errors for valid input")
+			})
+		}
+	})
+
+	t.Run("Test Lexer errors", func(t *testing.T) {
+		tests := []struct {
+			name               string
+			input              string
+			expectedErrorCount int
+			shouldContainError string
+		}{
+			{
+				name:               "Invalid character @",
+				input:              "@",
+				expectedErrorCount: 1,
+				shouldContainError: "Unexpected character",
+			},
+			{
+				name:               "Invalid character #",
+				input:              "#",
+				expectedErrorCount: 1,
+				shouldContainError: "Unexpected character",
+			},
+			{
+				name:               "Invalid character $",
+				input:              "$",
+				expectedErrorCount: 1,
+				shouldContainError: "Unexpected character",
+			},
+			{
+				name:               "Invalid number format",
+				input:              "123abc",
+				expectedErrorCount: 1,
+				shouldContainError: "Invalid number format",
+			},
+			{
+				name:               "Multiple invalid characters",
+				input:              "let x = @ + #",
+				expectedErrorCount: 2,
+				shouldContainError: "Unexpected character",
+			},
+			{
+				name:               "Invalid number in expression",
+				input:              "let x = 123abc + 5",
+				expectedErrorCount: 1,
+				shouldContainError: "Invalid number format",
+			},
+		}
+
+		for _, testCase := range tests {
+			t.Run(testCase.name, func(t *testing.T) {
+				errorCollector := errors.New(testCase.input, "test.navi")
+				lexerInstance := New(testCase.input, "test.navi", errorCollector)
+
+				for {
+					tok := lexerInstance.NextToken()
+					if tok.Type == token.EOF {
+						break
+					}
+				}
+
+				assert.True(t, errorCollector.HasErrors(),
+					"Lexer should produce errors for invalid input")
+			})
+		}
+	})
+
+	t.Run("Test whitespace handling", func(t *testing.T) {
+		tests := []multipleTokenTestCase{
+			{
+				name:  "Multiple spaces between tokens",
+				input: "let     x     =     5",
+				expectedTokens: []struct {
+					tokenType  token.TokenType
+					tokenValue string
+				}{
+					{token.LET, "let"},
+					{token.IDENTIFIER, "x"},
+					{token.ASSIGN, "="},
+					{token.INT, "5"},
+					{token.EOF, ""},
+				},
+			},
+			{
+				name:  "Tabs between tokens",
+				input: "let\tx\t=\t5",
+				expectedTokens: []struct {
+					tokenType  token.TokenType
+					tokenValue string
+				}{
+					{token.LET, "let"},
+					{token.IDENTIFIER, "x"},
+					{token.ASSIGN, "="},
+					{token.INT, "5"},
+					{token.EOF, ""},
+				},
+			},
+			{
+				name:  "Newline between statements",
+				input: "let x = 5\nlet y = 10",
+				expectedTokens: []struct {
+					tokenType  token.TokenType
+					tokenValue string
+				}{
+					{token.LET, "let"},
+					{token.IDENTIFIER, "x"},
+					{token.ASSIGN, "="},
+					{token.INT, "5"},
+					{token.NEW_LINE, "\n"},
+					{token.LET, "let"},
+					{token.IDENTIFIER, "y"},
+					{token.ASSIGN, "="},
+					{token.INT, "10"},
+					{token.EOF, ""},
+				},
+			},
+			{
+				name:  "Mixed whitespace",
+				input: "  let  \t x \n = \t\t 5  ",
+				expectedTokens: []struct {
+					tokenType  token.TokenType
+					tokenValue string
+				}{
+					{token.LET, "let"},
+					{token.IDENTIFIER, "x"},
+					{token.NEW_LINE, "\n"},
+					{token.ASSIGN, "="},
+					{token.INT, "5"},
+					{token.EOF, ""},
+				},
+			},
+			{
+				name:  "Multiple newlines",
+				input: "let x = 5\n\n\nlet y = 10",
+				expectedTokens: []struct {
+					tokenType  token.TokenType
+					tokenValue string
+				}{
+					{token.LET, "let"},
+					{token.IDENTIFIER, "x"},
+					{token.ASSIGN, "="},
+					{token.INT, "5"},
+					{token.NEW_LINE, "\n"},
+					{token.NEW_LINE, "\n"},
+					{token.NEW_LINE, "\n"},
+					{token.LET, "let"},
+					{token.IDENTIFIER, "y"},
+					{token.ASSIGN, "="},
+					{token.INT, "10"},
+					{token.EOF, ""},
+				},
+			},
+			{
+				name:  "No spaces (compact)",
+				input: "let x=5",
+				expectedTokens: []struct {
+					tokenType  token.TokenType
+					tokenValue string
+				}{
+					{token.LET, "let"},
+					{token.IDENTIFIER, "x"},
+					{token.ASSIGN, "="},
+					{token.INT, "5"},
+					{token.EOF, ""},
+				},
+			},
+		}
+
+		for _, testCase := range tests {
+			t.Run(testCase.name, func(t *testing.T) {
+				errorCollector := errors.New(testCase.input, "test.navi")
+				lexerInstance := New(testCase.input, "test.navi", errorCollector)
+
+				for index, expected := range testCase.expectedTokens {
+					tok := lexerInstance.NextToken()
+
+					assert.Equal(t, expected.tokenType, tok.Type,
+						"Token %d: type mismatch", index)
+					assert.Equal(t, expected.tokenValue, tok.Value,
+						"Token %d: value mismatch", index)
+				}
+
+				assert.False(t, errorCollector.HasErrors(),
+					"Lexer should not produce errors for valid input with whitespace")
 			})
 		}
 	})
