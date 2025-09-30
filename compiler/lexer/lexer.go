@@ -148,6 +148,12 @@ func (lexer *Lexer) Tokenize() []token.Token {
 
 // advances the lexer to the next character
 func (lexer *Lexer) advance() {
+	// Handle newline based on the character being consumed (previous currentChar)
+	if lexer.currentChar == '\n' {
+		lexer.line++
+		lexer.column = 0
+	}
+
 	if lexer.readPosition >= len(lexer.input) {
 		lexer.currentChar = 0 // ASCII code for NUL, signifies EOF
 	} else {
@@ -157,12 +163,6 @@ func (lexer *Lexer) advance() {
 	lexer.position = lexer.readPosition
 	lexer.readPosition++
 	lexer.column++
-
-	// Handle newline
-	if lexer.currentChar == '\n' {
-		lexer.line++
-		lexer.column = 0
-	}
 }
 
 // skipWhitespace skips spaces, tabs, and newlines

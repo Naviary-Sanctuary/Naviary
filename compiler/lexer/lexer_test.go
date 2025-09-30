@@ -565,4 +565,131 @@ func TestLexer(t *testing.T) {
 			})
 		}
 	})
+	t.Run("Test token position", func(t *testing.T) {
+		tests := []struct {
+			name           string
+			input          string
+			expectedTokens []struct {
+				tokenType token.TokenType
+				value     string
+				line      int
+				column    int
+			}
+		}{
+			{
+				name:  "Single line positions",
+				input: "let x = 5",
+				expectedTokens: []struct {
+					tokenType token.TokenType
+					value     string
+					line      int
+					column    int
+				}{
+					{token.LET, "let", 1, 1},
+					{token.IDENTIFIER, "x", 1, 5},
+					{token.ASSIGN, "=", 1, 7},
+					{token.INT, "5", 1, 9},
+				},
+			},
+			{
+				name:  "Multiple lines",
+				input: "let x = 5\nlet y = 10",
+				expectedTokens: []struct {
+					tokenType token.TokenType
+					value     string
+					line      int
+					column    int
+				}{
+					{token.LET, "let", 1, 1},
+					{token.IDENTIFIER, "x", 1, 5},
+					{token.ASSIGN, "=", 1, 7},
+					{token.INT, "5", 1, 9},
+					{token.NEW_LINE, "\n", 1, 10},
+					{token.LET, "let", 2, 1},
+					{token.IDENTIFIER, "y", 2, 5},
+					{token.ASSIGN, "=", 2, 7},
+					{token.INT, "10", 2, 9},
+				},
+			},
+			{
+				name:  "Function declaration with multiple lines",
+				input: "func main() {\n  let x = 5\n}",
+				expectedTokens: []struct {
+					tokenType token.TokenType
+					value     string
+					line      int
+					column    int
+				}{
+					{token.FUNC, "func", 1, 1},
+					{token.IDENTIFIER, "main", 1, 6},
+					{token.LEFT_PAREN, "(", 1, 10},
+					{token.RIGHT_PAREN, ")", 1, 11},
+					{token.LEFT_BRACE, "{", 1, 13},
+					{token.NEW_LINE, "\n", 1, 14},
+					{token.LET, "let", 2, 3},
+					{token.IDENTIFIER, "x", 2, 7},
+					{token.ASSIGN, "=", 2, 9},
+					{token.INT, "5", 2, 11},
+					{token.NEW_LINE, "\n", 2, 12},
+					{token.RIGHT_BRACE, "}", 3, 1},
+				},
+			},
+			{
+				name:  "Compound tokens positions",
+				input: "func add() -> int",
+				expectedTokens: []struct {
+					tokenType token.TokenType
+					value     string
+					line      int
+					column    int
+				}{
+					{token.FUNC, "func", 1, 1},
+					{token.IDENTIFIER, "add", 1, 6},
+					{token.LEFT_PAREN, "(", 1, 9},
+					{token.RIGHT_PAREN, ")", 1, 10},
+					{token.ARROW, "->", 1, 12},
+					{token.IDENTIFIER, "int", 1, 15},
+				},
+			},
+			{
+				name:  "Colon assign position",
+				input: "let x := 5",
+				expectedTokens: []struct {
+					tokenType token.TokenType
+					value     string
+					line      int
+					column    int
+				}{
+					{token.LET, "let", 1, 1},
+					{token.IDENTIFIER, "x", 1, 5},
+					{token.COLON_ASSIGN, ":=", 1, 7},
+					{token.INT, "5", 1, 10},
+				},
+			},
+		}
+
+		for _, testCase := range tests {
+			t.Run(testCase.name, func(t *testing.T) {
+				errorCollector := errors.New(testCase.input, "test.navi")
+				lexerInstance := New(testCase.input, "test.navi", errorCollector)
+
+				for index, expected := range testCase.expectedTokens {
+					tok := lexerInstance.NextToken()
+
+					assert.Equal(t, expected.tokenType, tok.Type,
+						"Token %d: type mismatch", index)
+					assert.Equal(t, expected.value, tok.Value,
+						"Token %d: value mismatch", index)
+					assert.Equal(t, expected.line, tok.Line,
+						"Token %d (%s): line mismatch", index, expected.value)
+					assert.Equal(t, expected.column, tok.Column,
+						"Token %d (%s): column mismatch", index, expected.value)
+				}
+
+				// Verify no errors occurred
+				assert.False(t, errorCollector.HasErrors(),
+					"Lexer should not produce errors for valid input")
+			})
+		}
+	})
 }
