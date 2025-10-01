@@ -11,8 +11,8 @@ const (
 	ILLEGAL
 
 	// Literals
-	INT        // 123
-	IDENTIFIER // variable names
+	INT_LITERAL // 123
+	IDENTIFIER  // variable names
 
 	// Keywords
 	LET    // let

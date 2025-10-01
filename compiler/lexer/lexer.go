@@ -105,7 +105,7 @@ func (lexer *Lexer) NextToken() token.Token {
 			return t // readIdentifier already advanced position
 		} else if isDigit(lexer.currentChar) {
 			t.Value = lexer.readNumber()
-			t.Type = token.INT
+			t.Type = token.INT_LITERAL
 			return t // readNumber already advanced position
 		} else {
 			t = token.New(token.ILLEGAL, string(lexer.currentChar), lexer.line, lexer.column)

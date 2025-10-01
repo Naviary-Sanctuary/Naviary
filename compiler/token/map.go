@@ -6,7 +6,7 @@ var tokenMap = [...]string{
 	EOF:     "EOF",
 
 	// Literals
-	INT: "INT",
+	INT_LITERAL: "INT_LITERAL",
 
 	// Identifier
 	IDENTIFIER: "IDENTIFIER",

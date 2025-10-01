@@ -361,7 +361,7 @@ func (parser *Parser) skipEndOfStatement() {
 // parseAtom parses an literals and identifiers
 func (parser *Parser) parseAtom() ast.Expression {
 	switch parser.currentToken.Type {
-	case token.INT:
+	case token.INT_LITERAL:
 		return &ast.IntegerLiteral{
 			Token: parser.currentToken,
 			Value: parser.currentToken.Value,
