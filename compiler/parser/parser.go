@@ -89,7 +89,17 @@ func (parser *Parser) parseLetStatement() ast.Statement {
 		Value: parser.currentToken.Value,
 	}
 
-	parser.advance() // advance to assignment operator
+	parser.advance() // consume identifier
+
+	var typeAnnotation *ast.TypeAnnotation
+	if parser.currentToken.Type == token.COLON {
+
+		typeAnnotation = parser.parseTypeAnnotation()
+
+		if typeAnnotation == nil {
+			return nil
+		}
+	}
 
 	switch parser.currentToken.Type {
 	case token.COLON_ASSIGN:
@@ -105,10 +115,11 @@ func (parser *Parser) parseLetStatement() ast.Statement {
 	value := parser.parseExpression(LOWEST)
 
 	statement := &ast.LetStatement{
-		Token:   letToken,
-		Name:    name,
-		Value:   value,
-		Mutable: isMutable,
+		Token:          letToken,
+		Name:           name,
+		Value:          value,
+		TypeAnnotation: typeAnnotation,
+		Mutable:        isMutable,
 	}
 
 	parser.skipEndOfStatement()
@@ -432,16 +443,19 @@ func (parser *Parser) parseTypeAnnotation() *ast.TypeAnnotation {
 
 	parser.advance() // consume ':'
 
-	if !parser.expect(token.IDENTIFIER) {
+	switch parser.currentToken.Type {
+	case token.INT, token.FLOAT, token.STRING, token.BOOL, token.IDENTIFIER:
+
+		typeAnnotation := &ast.TypeAnnotation{
+			Token: parser.currentToken,
+			Value: parser.currentToken.Value,
+		}
+
+		parser.advance() // consume type
+
+		return typeAnnotation
+	default:
 		return nil
 	}
 
-	typeAnnotation := &ast.TypeAnnotation{
-		Token: parser.currentToken,
-		Value: parser.currentToken.Value,
-	}
-
-	parser.advance() // consume type
-
-	return typeAnnotation
 }

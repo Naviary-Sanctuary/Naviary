@@ -17,6 +17,12 @@ var tokenMap = [...]string{
 	FUNC:   "func",
 	RETURN: "return",
 
+	// Type keywords
+	INT:    "int",
+	FLOAT:  "float",
+	STRING: "string",
+	BOOL:   "bool",
+
 	// Operators
 	PLUS:         "+",
 	MINUS:        "-",

@@ -20,6 +20,12 @@ const (
 	RETURN // return
 	FUNC   // func
 
+	// Type keywords
+	INT    // int
+	FLOAT  // float
+	STRING // string
+	BOOL   // bool
+
 	operatorBegin
 	// Operators
 	PLUS         // +

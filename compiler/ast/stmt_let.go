@@ -6,10 +6,11 @@ import (
 )
 
 type LetStatement struct {
-	Token   token.Token
-	Name    *Identifier
-	Value   Expression
-	Mutable bool
+	Token          token.Token
+	Name           *Identifier
+	Value          Expression
+	TypeAnnotation *TypeAnnotation
+	Mutable        bool
 }
 
 func (let *LetStatement) statementNode() {}
@@ -26,6 +27,13 @@ func (let *LetStatement) String() string {
 		out.WriteString("mut ")
 	}
 	out.WriteString(let.Name.String())
+
+	// Add type annotation if present
+	if let.TypeAnnotation != nil {
+		out.WriteString(": ")
+		out.WriteString(let.TypeAnnotation.Value)
+	}
+
 	out.WriteString(" = ")
 
 	if let.Value != nil {

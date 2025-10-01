@@ -23,6 +23,11 @@ var keywords = map[string]TokenType{
 	"func":   FUNC,
 	"return": RETURN,
 	"mut":    MUT,
+
+	"int":    INT,
+	"float":  FLOAT,
+	"string": STRING,
+	"bool":   BOOL,
 }
 
 // LookupIdentifier checks if an identifier is a keyword
