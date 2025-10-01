@@ -1,19 +1,17 @@
 package main
 
 import (
-	"compiler/codegen"
 	"compiler/constants"
 	"compiler/errors"
 	"compiler/lexer"
 	"compiler/parser"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
-// CompileFile compiles a single Naviary source file to Erlang
+// CompileFile compiles a single Naviary source file
 func CompileFile(inputPath string, runAfterCompile bool) error {
 	sourceCode, err := os.ReadFile(inputPath)
 	if err != nil {
@@ -38,48 +36,12 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 
 	// Step 2: Parsing
 	parserInstance := parser.New(lexerInstance, errorCollector)
-	program := parserInstance.ParseProgram()
+	parserInstance.ParseProgram()
 
 	// Transfer parser errors to main collector
 	if errorCollector.HasErrors() {
 		errorCollector.Display()
 		return fmt.Errorf("compilation failed")
-	}
-
-	// Step 3: Code Generation
-	generator := codegen.New(fileName, errorCollector)
-	erlangCode, err := generator.GenerateToFile(program)
-	if err != nil {
-		if errorCollector.HasErrors() {
-			errorCollector.Display()
-		}
-		return fmt.Errorf("code generation failed: %v", err)
-	}
-
-	// Step 4: Write output file
-	outputPath := strings.TrimSuffix(inputPath, constants.NAVIARY_EXTENSION) + constants.ERLANG_EXTENSION
-	err = os.WriteFile(outputPath, []byte(erlangCode), 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write output file %s: %v", outputPath, err)
-	}
-
-	fmt.Printf("✓ Generated %s\n", outputPath)
-
-	// Step 5: Compile to BEAM
-	err = CompileToBeam(outputPath)
-	if err != nil {
-		return err
-	}
-
-	beamFile := strings.TrimSuffix(outputPath, constants.ERLANG_EXTENSION) + constants.BEAM_EXTENSION
-	fmt.Printf("✓ Compiled to %s\n", beamFile)
-
-	// Step 6: Run if requested
-	if runAfterCompile {
-		moduleName := strings.TrimSuffix(filepath.Base(inputPath), constants.NAVIARY_EXTENSION)
-		moduleDir := filepath.Dir(outputPath)
-		fmt.Println("\n--- Output ---")
-		return RunBeam(moduleName, moduleDir)
 	}
 
 	return nil
@@ -123,28 +85,4 @@ func main() {
 	}
 
 	fmt.Println("Compilation successful!")
-}
-
-func CompileToBeam(erlangFile string) error {
-	// Compile to BEAM and place output in the same directory as the .erl file
-	outputDir := filepath.Dir(erlangFile)
-	cmd := exec.Command("erlc", "-o", outputDir, erlangFile)
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		return fmt.Errorf("failed to compile to BEAM: %v\n%s", err, string(output))
-	}
-
-	return nil
-}
-
-// RunBeam runs the compiled BEAM file
-func RunBeam(moduleName string, moduleDir string) error {
-	// Run the Erlang module from its directory so the runtime can find the .beam file
-	cmd := exec.Command("erl", "-pa", moduleDir, "-noshell", "-s", moduleName, "start", "-s", "init", "stop")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = moduleDir
-
-	return cmd.Run()
 }
