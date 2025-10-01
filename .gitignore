@@ -1,18 +1,8 @@
-**/target
-**/output.ll
-**/output.o
-**/program
-**/runtime.o
-**/.DS_Store
+# compiler
+examples/*.c
 
 # runtime
-**/io.o
-**/libnavi_runtime.a
-**/test_program
-**/test.o
+runtime/*.o
 
 # output files
-examples/*.s
-**/*.beam
-**/*.erl
 compiler/naviary

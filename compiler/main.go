@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compiler/codegen"
 	"compiler/constants"
 	"compiler/errors"
 	"compiler/lexer"
@@ -36,13 +37,31 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 
 	// Step 2: Parsing
 	parserInstance := parser.New(lexerInstance, errorCollector)
-	parserInstance.ParseProgram()
+	program := parserInstance.ParseProgram()
 
 	// Transfer parser errors to main collector
 	if errorCollector.HasErrors() {
 		errorCollector.Display()
 		return fmt.Errorf("compilation failed")
 	}
+
+	//Step 3: Code Generation
+	generator := codegen.NewCGenerator(errorCollector)
+	cCode := generator.Generate(program)
+
+	if errorCollector.HasErrors() {
+		errorCollector.Display()
+		return fmt.Errorf("compilation failed")
+	}
+
+	//Step 4: Write C file
+	outputPath := strings.TrimSuffix(inputPath, constants.NAVIARY_EXTENSION) + ".c"
+	err = os.WriteFile(outputPath, []byte(cCode), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write C file: %v", err)
+	}
+
+	fmt.Printf("C code generated successfully: %s\n", outputPath)
 
 	return nil
 }
