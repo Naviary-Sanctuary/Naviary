@@ -11,14 +11,17 @@ const (
 	ILLEGAL
 
 	// Literals
-	INT_LITERAL // 123
-	IDENTIFIER  // variable names
+	INT_LITERAL    // 123
+	STRING_LITERAL // "hello"
+	IDENTIFIER     // variable names
 
 	// Keywords
 	LET    // let
 	MUT    // mut
 	RETURN // return
 	FUNC   // func
+	CLASS  // class
+	THIS   // this
 
 	// Type keywords
 	INT    // int
@@ -34,6 +37,7 @@ const (
 	SLASH        // /
 	ASSIGN       // =
 	COLON_ASSIGN // :=
+	DOT          // .
 
 	operatorEnd
 

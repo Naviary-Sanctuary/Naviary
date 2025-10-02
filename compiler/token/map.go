@@ -6,7 +6,8 @@ var tokenMap = [...]string{
 	EOF:     "EOF",
 
 	// Literals
-	INT_LITERAL: "INT_LITERAL",
+	INT_LITERAL:    "INT_LITERAL",
+	STRING_LITERAL: "STRING_LITERAL",
 
 	// Identifier
 	IDENTIFIER: "IDENTIFIER",
@@ -16,6 +17,8 @@ var tokenMap = [...]string{
 	MUT:    "mut",
 	FUNC:   "func",
 	RETURN: "return",
+	CLASS:  "class",
+	THIS:   "this",
 
 	// Type keywords
 	INT:    "int",
@@ -30,6 +33,7 @@ var tokenMap = [...]string{
 	SLASH:        "/",
 	ASSIGN:       "=",
 	COLON_ASSIGN: ":=",
+	DOT:          ".",
 
 	// Delimiters
 	LEFT_PAREN:  "(",

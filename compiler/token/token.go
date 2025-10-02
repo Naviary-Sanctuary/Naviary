@@ -23,6 +23,8 @@ var keywords = map[string]TokenType{
 	"func":   FUNC,
 	"return": RETURN,
 	"mut":    MUT,
+	"class":  CLASS,
+	"this":   THIS,
 
 	"int":    INT,
 	"float":  FLOAT,
