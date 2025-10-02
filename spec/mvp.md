@@ -6,15 +6,15 @@
 
 - **Source Code Extension**: `.navi`
 - **Compiler Language**: Go
-- **Target**: C source code → Native binary
-- **Runtime**: Zig runtime library
+- **Target**: LLVM IR → Native binary
+- **Runtime**: Zig runtime library (linked via LLVM)
 - **Memory Management**: Stack map-based GC
   - Phase 1: Mark & Sweep
   - Phase 2: Generational
   - Phase 3: Concurrent (Go-style)
 - **Type System**: Static typing with local inference
 - **OOP Model**: Single inheritance + interfaces
-- **Build Pipeline**: `.navi` → `.c` → native executable
+- **Build Pipeline**: `.navi` → AST → NIR (Naviary High-level Intermediate Representation) → LLVM IR → native executable
 
 ## Version Roadmap
 
@@ -33,7 +33,9 @@ func main() {
 
 - Basic lexer (numbers, identifiers, operators)
 - Simple parser (functions, let, expressions)
-- C code generation
+- AST generation
+- Basic NIR lowering from AST
+- LLVM IR code generation
 - No type system yet (everything is int)
 - Stack map infrastructure (prep for GC)
 
@@ -68,7 +70,7 @@ func main() {
 
 - Type annotations: `let x: int = 5`
 - Basic types: `int`, `float`, `string`, `bool`
-- Type checking
+- Type checking in NIR
 - Control flow: `if-else`, `for`, `while`
 - Comparison and logical operators
 - GC safepoints at loops and function calls
@@ -203,11 +205,11 @@ pub fn collect() void {
 
 #### Stack Maps
 
-```c
-// Generated for each function
-static StackMapEntry main_stack_map[] = {
-    {.pc = 0x10, .live_ptrs = 0b101},  // Bitmap of pointer locations
-};
+```llvm
+; Generated for each function
+@main_stack_map = global [1 x { i64, i32 }] [
+  { i64 16, i32 5 } ; PC offset 0x10, live ptrs bitmap 0b101
+]
 ```
 
 ### Phase 2: Generational GC (0.2.0)
@@ -224,9 +226,9 @@ const GenerationalGC = struct {
 
 #### Write Barrier
 
-```c
-// Added to all pointer writes
-na_write_barrier(obj, field, value);
+```llvm
+; Added to all pointer writes
+call void @na_write_barrier(ptr %obj, i32 %field, ptr %value)
 ```
 
 ### Phase 3: Concurrent GC (0.3.0)
@@ -255,14 +257,14 @@ na_write_barrier(obj, field, value);
 ### Compilation Pipeline
 
 ```bash
-# Compile Naviary to C
+# Compile Naviary to LLVM IR
 naviary compile app.navi
 # Output:
-#   app.c            - Main program
-#   app_gc_meta.c    - Stack maps & type info
+#   app.ll           - Main program IR
+#   app_gc_meta.ll   - Stack maps & type info
 
-# Build with Zig runtime
-zig cc app.c app_gc_meta.c -lnaviary_runtime -o app
+# Build with Zig runtime and LLVM
+clang app.ll app_gc_meta.ll -lnaviary_runtime -o app
 
 # Run
 ./app
@@ -275,9 +277,9 @@ NAVIARY_GC_THRESHOLD=10M ./app  # GC trigger threshold
 NAVIARY_GC_VERBOSE=1 ./app      # Print GC statistics
 ```
 
-## C Code Generation Examples
+## LLVM IR Generation Examples
 
-### Class to C Struct
+### Class to LLVM Struct
 
 ```navi
 class Point(x: int, y: int)
@@ -285,18 +287,18 @@ class Point(x: int, y: int)
 
 Generates:
 
-```c
-typedef struct {
-    GCHeader gc_header;
-    int x;
-    int y;
-} Point;
+```llvm
+%GCHeader = type { ptr, i32, i64, i1 }
 
-Point* Point_new(int x, int y) {
-    Point* p = (Point*)na_gc_alloc(sizeof(Point), POINT_TYPE);
-    p->x = x;
-    p->y = y;
-    return p;
+%Point = type { %GCHeader, i32, i32 }
+
+define ptr @Point_new(i32 %x, i32 %y) {
+  %p = call ptr @na_gc_alloc(i64 16, i32 1) ; sizeof(Point), POINT_TYPE
+  %x_ptr = getelementptr %Point, ptr %p, i32 0, i32 1
+  store i32 %x, ptr %x_ptr
+  %y_ptr = getelementptr %Point, ptr %p, i32 0, i32 2
+  store i32 %y, ptr %y_ptr
+  ret ptr %p
 }
 ```
 
@@ -312,9 +314,13 @@ class Circle(radius: float) {
 
 Generates:
 
-```c
-float Circle_area(Circle* this) {
-    return 3.14 * this->radius * this->radius;
+```llvm
+define double @Circle_area(ptr %this) {
+  %radius_ptr = getelementptr %Circle, ptr %this, i32 0, i32 1
+  %radius = load double, ptr %radius_ptr
+  %sq = fmul double %radius, %radius
+  %area = fmul double 3.140000e+00, %sq
+  ret double %area
 }
 ```
 
@@ -327,24 +333,14 @@ class Dog: Animal { override func speak() -> string }
 
 Generates:
 
-```c
-typedef struct {
-    char* (*speak)(void*);
-} Animal_VTable;
+```llvm
+%Animal_VTable = type { ptr } ; ptr to speak function
 
-typedef struct {
-    GCHeader gc_header;
-    Animal_VTable* vtable;
-} Animal;
+%Animal = type { %GCHeader, ptr } ; vtable ptr
 
-typedef struct {
-    Animal base;
-    // Dog-specific fields
-} Dog;
+%Dog = type { %Animal, ; Dog-specific fields }
 
-static Animal_VTable dog_vtable = {
-    .speak = (void*)Dog_speak
-};
+@dog_vtable = global %Animal_VTable { ptr @Dog_speak }
 ```
 
 ## Success Metrics
