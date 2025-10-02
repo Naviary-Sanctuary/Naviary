@@ -3,6 +3,7 @@ examples/*.c
 
 # runtime
 runtime/*.o
+runtime/.zig-cache
 
 # output files
-compiler/naviary
+build/*
