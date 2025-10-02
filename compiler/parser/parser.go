@@ -377,6 +377,11 @@ func (parser *Parser) parseAtom() ast.Expression {
 			Token: parser.currentToken,
 			Value: parser.currentToken.Value,
 		}
+	case token.STRING_LITERAL:
+		return &ast.StringLiteral{
+			Token: parser.currentToken,
+			Value: parser.currentToken.Value,
+		}
 	case token.IDENTIFIER:
 		return &ast.Identifier{
 			Token: parser.currentToken,

@@ -1,3 +1,0 @@
-func main(){
-  let a = 123_ // compile error
-}

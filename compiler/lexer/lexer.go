@@ -95,6 +95,10 @@ func (lexer *Lexer) NextToken() token.Token {
 	case '\n':
 		t = token.New(token.NEW_LINE, string(lexer.currentChar), lexer.line, lexer.column)
 		lexer.advance()
+	case '"':
+		t.Value = lexer.readString()
+		t.Type = token.STRING_LITERAL
+		return t // readString already advanced position
 	case 0:
 		t.Type = token.EOF
 		t.Value = ""
@@ -170,6 +174,73 @@ func (lexer *Lexer) skipWhitespace() {
 	for lexer.currentChar == ' ' || lexer.currentChar == '\t' || lexer.currentChar == '\r' {
 		lexer.advance()
 	}
+}
+
+func (lexer *Lexer) readString() string {
+	lexer.advance() //consume opening quote
+
+	startPosition := lexer.position
+	for lexer.currentChar != '"' && lexer.currentChar != 0 {
+		if lexer.currentChar == '\\' {
+			lexer.advance() // consume backslash
+			if lexer.currentChar == 0 {
+				break
+			}
+		}
+		lexer.advance()
+	}
+
+	if lexer.currentChar == 0 {
+		lexer.errors.Add(
+			errors.LexicalError,
+			lexer.line,
+			lexer.column,
+			1,
+			"Unterminated string literal",
+		)
+		return lexer.input[startPosition:lexer.position]
+	}
+
+	result := lexer.input[startPosition:lexer.position]
+	lexer.advance() // consume closing quote
+
+	return lexer.processEscapeSequences(result)
+}
+
+func (lexer *Lexer) processEscapeSequences(str string) string {
+	var result []byte
+	i := 0
+
+	for i < len(str) {
+		if str[i] == '\\' && i+1 < len(str) {
+			switch str[i+1] {
+			case 'n':
+				result = append(result, '\n')
+				i += 2
+			case 't':
+				result = append(result, '\t')
+				i += 2
+			case 'r':
+				result = append(result, '\r')
+				i += 2
+			case '\\':
+				result = append(result, '\\')
+				i += 2
+			case '"':
+				result = append(result, '"')
+				i += 2
+			default:
+				// Unknown escape sequence, keep as is
+				result = append(result, str[i])
+				i++
+			}
+		} else {
+			result = append(result, str[i])
+			i++
+		}
+	}
+
+	return string(result)
 }
 
 // readNumber reads a number from the input

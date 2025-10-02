@@ -106,6 +106,8 @@ func (generator *CGenerator) generateExpression(expr ast.Expression) {
 	switch expression := expr.(type) {
 	case *ast.IntegerLiteral:
 		generator.emitter.Emit(expression.Value)
+	case *ast.StringLiteral:
+		generator.emitter.Emit("%q", expression.Value)
 	case *ast.Identifier:
 		generator.emitter.Emit(expression.Value)
 	case *ast.BinaryExpression:
