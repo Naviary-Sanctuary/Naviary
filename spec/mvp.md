@@ -1,4 +1,4 @@
-# Naviary MVP Roadmap (Revised)
+# Naviary MVP Roadm
 
 ## Implementation Design
 
