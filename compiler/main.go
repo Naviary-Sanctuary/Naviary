@@ -1,10 +1,10 @@
 package main
 
 import (
-	"compiler/codegen"
 	"compiler/constants"
 	"compiler/errors"
 	"compiler/lexer"
+	"compiler/nir"
 	"compiler/parser"
 	"fmt"
 	"os"
@@ -45,23 +45,22 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 		return fmt.Errorf("compilation failed")
 	}
 
-	//Step 3: Code Generation
-	generator := codegen.NewCGenerator(errorCollector)
-	cCode := generator.Generate(program)
+	//Step 3: Lower AST to NIR
+	lowerer := nir.NewLowerer(errorCollector)
+	nirModule := lowerer.Lower(program)
 
 	if errorCollector.HasErrors() {
 		errorCollector.Display()
-		return fmt.Errorf("compilation failed")
+		return fmt.Errorf("lowering failed")
 	}
 
-	//Step 4: Write C file
-	outputPath := strings.TrimSuffix(inputPath, constants.NAVIARY_EXTENSION) + ".c"
-	err = os.WriteFile(outputPath, []byte(cCode), 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write C file: %v", err)
-	}
+	fmt.Println("\n=== Generated NIR ===")
+	fmt.Println(nirModule.String())
 
-	fmt.Printf("C code generated successfully: %s\n", outputPath)
+	if !nirModule.IsComplete() {
+		return fmt.Errorf("generated NIR module is incomplete")
+	}
+	fmt.Println("NIR generation successful!")
 
 	return nil
 }

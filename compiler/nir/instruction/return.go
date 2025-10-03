@@ -19,7 +19,7 @@ func (returnInst *ReturnInstruction) String() string {
 	if returnInst.value != nil {
 		return fmt.Sprintf("Return(%s)", returnInst.value.String())
 	}
-	return "Return(void)"
+	return "Return(nil)"
 }
 
 func (returnInst *ReturnInstruction) GetResult() value.Value {
