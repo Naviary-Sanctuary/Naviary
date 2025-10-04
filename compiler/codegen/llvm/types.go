@@ -35,22 +35,23 @@ func (converter *TypeConverter) Convert(naviaryType types.Type) (llvm.Type, erro
 }
 
 func (converter *TypeConverter) convertPrimitiveType(primitiveType *types.PrimitiveType) (llvm.Type, error) {
+	context := converter.context.GetRawContext()
 	switch primitiveType.Name {
 	case "int":
-		return llvm.GlobalContext().Int64Type(), nil
+		return context.Int64Type(), nil
 	case "float":
-		return llvm.GlobalContext().DoubleType(), nil
+		return context.DoubleType(), nil
 	case "string":
-		return llvm.PointerType(llvm.GlobalContext().Int8Type(), 0), nil
+		return llvm.PointerType(context.Int8Type(), 0), nil
 	case "bool":
-		return llvm.GlobalContext().Int1Type(), nil
+		return context.Int1Type(), nil
 	default:
 		return llvm.Type{}, fmt.Errorf("unknown primitive type: %s", primitiveType.Name)
 	}
 }
 
 func (converter *TypeConverter) convertNilType(nilType *types.NilType) (llvm.Type, error) {
-	return llvm.GlobalContext().VoidType(), nil
+	return converter.context.GetRawContext().VoidType(), nil
 }
 
 func (converter *TypeConverter) convertFunctionType(functionType *types.FunctionType) (llvm.Type, error) {

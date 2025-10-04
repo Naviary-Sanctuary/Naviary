@@ -125,7 +125,12 @@ func (converter *FunctionConverter) convertBasicBlocks(nirFunction *nir.Function
 		var llvmBlock llvm.BasicBlock
 
 		if nirBlock.Name == "entry" {
-			llvmBlock = llvmFunction.FirstBasicBlock()
+			firstBlock := llvmFunction.FirstBasicBlock()
+			if firstBlock.IsNil() {
+				llvmBlock = llvm.AddBasicBlock(llvmFunction, nirBlock.Name)
+			} else {
+				llvmBlock = firstBlock
+			}
 		} else {
 			llvmBlock = llvm.AddBasicBlock(llvmFunction, nirBlock.Name)
 		}

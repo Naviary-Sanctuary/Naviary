@@ -57,9 +57,9 @@ build: $(COMPILER_BIN)
 		exit 1; \
 	fi
 	@FILE=$(filter-out $@,$(MAKECMDGOALS)); \
-	echo "Compiling $$FILE to C..."; \
+	echo "Compiling $$FILE to LLVM IR..."; \
 	$(COMPILER_BIN) $$FILE
-	@echo "C file generated successfully"
+	@echo "LLVM IR generated successfully"
 
 # Run any .navi file (build C, compile to executable, and run)
 .PHONY: run

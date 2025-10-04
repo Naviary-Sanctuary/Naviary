@@ -55,9 +55,6 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 		return fmt.Errorf("lowering failed")
 	}
 
-	fmt.Println("\n=== Generated NIR ===")
-	fmt.Println(nirModule.String())
-
 	if !nirModule.IsComplete() {
 		return fmt.Errorf("generated NIR module is incomplete")
 	}
@@ -73,15 +70,15 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 		return fmt.Errorf("failed to generate LLVM IR: %w", err)
 	}
 
-	fmt.Println("\n=== Generated LLVM IR ===")
-	fmt.Println(llvmIR)
-
 	// Step 5: LLVM IR to file
-	outputPath := strings.TrimSuffix(filepath.Base(inputPath), constants.NAVIARY_EXTENSION) + ".ll"
+	outputPath := strings.TrimSuffix(inputPath, constants.NAVIARY_EXTENSION) + ".ll"
 	err = os.WriteFile(outputPath, []byte(llvmIR), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write LLVM IR to file: %w", err)
 	}
+
+	fmt.Println("\n=== Generated LLVM IR ===")
+	fmt.Println(llvmIR)
 
 	return nil
 }

@@ -189,7 +189,7 @@ func (converter *InstructionConverter) ConvertCall(callInstruction *instruction.
 		return fmt.Errorf("function %s not found in module", functionName)
 	}
 
-	functionType := calleeFunction.Type().ElementType()
+	functionType := calleeFunction.GlobalValueType()
 
 	result := callInstruction.GetResult()
 	if result != nil {

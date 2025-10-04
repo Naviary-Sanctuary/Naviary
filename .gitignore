@@ -1,5 +1,5 @@
 # compiler
-examples/*.c
+examples/*.ll
 
 # runtime
 runtime/*.o
@@ -7,3 +7,6 @@ runtime/.zig-cache
 
 # output files
 build/*
+
+# etc
+**/.DS_Store
