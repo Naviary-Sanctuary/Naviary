@@ -66,7 +66,10 @@ func (lowerer *Lowerer) lowerFunction(astFunc *ast.FunctionStatement) *Function 
 	// For now, default to nil
 	// TODO: Use return type annotation when type system is implemented
 	var returnType types.Type = types.Nil
-	if astFunc.ReturnType != nil {
+
+	if astFunc.Name.Value == "main" {
+		returnType = types.Int
+	} else if astFunc.ReturnType != nil {
 		returnType = lowerer.getType(astFunc.ReturnType)
 	}
 
@@ -83,7 +86,12 @@ func (lowerer *Lowerer) lowerFunction(astFunc *ast.FunctionStatement) *Function 
 
 	// Add implicit return for void functions if missing
 	if !entryBlock.IsComplete() {
-		lowerer.builder.BuildReturn(nil)
+		if astFunc.Name.Value == "main" {
+			lowerer.builder.BuildReturn(lowerer.builder.CreateConstantInt(0))
+
+		} else {
+			lowerer.builder.BuildReturn(nil)
+		}
 	}
 
 	function.AddBasicBlock(entryBlock)

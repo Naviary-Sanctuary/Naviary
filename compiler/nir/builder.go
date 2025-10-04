@@ -102,10 +102,10 @@ func (builder *Builder) BuildCall(functionName string, arguments []value.Value, 
 }
 
 func (builder *Builder) BuildReturn(val value.Value) {
-	returnInst := instruction.NewReturnInstruction(val)
+	resultInstruction := instruction.NewReturnInstruction(val)
 
 	if builder.currentBlock != nil {
-		builder.currentBlock.Terminator = returnInst
+		builder.currentBlock.Terminator = resultInstruction
 	}
 }
 

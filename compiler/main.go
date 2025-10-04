@@ -77,9 +77,6 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 		return fmt.Errorf("failed to write LLVM IR to file: %w", err)
 	}
 
-	fmt.Println("\n=== Generated LLVM IR ===")
-	fmt.Println(llvmIR)
-
 	return nil
 }
 

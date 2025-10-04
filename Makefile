@@ -49,7 +49,7 @@ compiler: $(COMPILER_BIN)
 .PHONY: runtime
 runtime: $(RUNTIME_LIB)
 
-# Build any .navi file to C
+# Build any .navi file to LLVM IR
 .PHONY: build
 build: $(COMPILER_BIN)
 	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
@@ -70,21 +70,23 @@ run: $(COMPILER_BIN) $(RUNTIME_LIB) | $(BIN_DIR)
 	fi
 	@FILE=$(filter-out $@,$(MAKECMDGOALS)); \
 	BASENAME=$$(basename $$FILE .navi); \
-	echo "Compiling $$FILE to C..."; \
+	echo "Compiling $$FILE to LLVM IR..."; \
 	$(COMPILER_BIN) $$FILE; \
-	C_FILE=$$(dirname $$FILE)/$$BASENAME.c; \
-	echo "Building executable..."; \
-	$(CC) $$C_FILE $(RUNTIME_LIB) -o $(BIN_DIR)/$$BASENAME; \
+	LLVM_FILE=$$(dirname $$FILE)/$$BASENAME.ll; \
+	echo "Building executable from LLVM IR..."; \
+	$(CC) $(LDFLAGS) $$LLVM_FILE $(RUNTIME_LIB) -o $(BIN_DIR)/$$BASENAME; \
 	echo "Running $$BASENAME..."; \
 	echo "-------------------"; \
 	$(BIN_DIR)/$$BASENAME
 
-# Prevent make from interpreting .navi files as targets
-%:
+# Dummy target to suppress messages for .navi files when used as arguments
+%.navi: FORCE
 	@:
+
+FORCE:
 
 # Clean
 .PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR)
-	find . -name "*.c" -not -path "./runtime/*" -delete
+	find . -name "*.ll" -not -path "./runtime/*" -delete
