@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compiler/codegen/llvm"
 	"compiler/constants"
 	"compiler/errors"
 	"compiler/lexer"
@@ -61,6 +62,26 @@ func CompileFile(inputPath string, runAfterCompile bool) error {
 		return fmt.Errorf("generated NIR module is incomplete")
 	}
 	fmt.Println("NIR generation successful!")
+
+	// Step 4: Generate LLVM IR
+	fmt.Println("Generating LLVM IR...")
+	generator := llvm.NewGenerator()
+	defer generator.Dispose()
+
+	llvmIR, err := generator.Generate(nirModule)
+	if err != nil {
+		return fmt.Errorf("failed to generate LLVM IR: %w", err)
+	}
+
+	fmt.Println("\n=== Generated LLVM IR ===")
+	fmt.Println(llvmIR)
+
+	// Step 5: LLVM IR to file
+	outputPath := strings.TrimSuffix(filepath.Base(inputPath), constants.NAVIARY_EXTENSION) + ".ll"
+	err = os.WriteFile(outputPath, []byte(llvmIR), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write LLVM IR to file: %w", err)
+	}
 
 	return nil
 }
