@@ -4,6 +4,7 @@ import (
 	llvmvalue "compiler/codegen/llvm/value"
 	"compiler/nir/instruction"
 	nirvalue "compiler/nir/value"
+	"compiler/types"
 	"fmt"
 
 	"tinygo.org/x/go-llvm"
@@ -171,6 +172,22 @@ func (converter *InstructionConverter) ConvertCall(callInstruction *instruction.
 	}
 
 	arguments := callInstruction.GetArguments()
+
+	if functionName == "print" {
+		if len(arguments) != 1 {
+			return fmt.Errorf("print function expects 1 argument for now. got %d", len(arguments))
+		}
+		argument := arguments[0]
+		argumentType := argument.Type()
+
+		if argumentType == types.Int {
+			functionName = "print_int"
+		} else if argumentType == types.String {
+			functionName = "print_string"
+		} else {
+			return fmt.Errorf("print function does not support type: %s", argumentType.String())
+		}
+	}
 
 	llvmArguments := make([]llvm.Value, len(arguments))
 	for i, arg := range arguments {

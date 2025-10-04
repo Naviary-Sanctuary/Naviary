@@ -53,11 +53,15 @@ func (converter *ModuleConverter) Convert(nirModule *nir.Module) (string, error)
 }
 
 func (converter *ModuleConverter) declareRuntimeFunctions() error {
-	// TODO: currently we only support int64 type for print function
 	context := converter.context.GetRawContext()
-	printParamTypes := []llvm.Type{context.Int64Type()}
-	printFuncType := llvm.FunctionType(context.VoidType(), printParamTypes, false)
-	llvm.AddFunction(converter.module, "print", printFuncType)
+
+	printIntParamTypes := []llvm.Type{context.Int64Type()}
+	printIntFuncType := llvm.FunctionType(context.VoidType(), printIntParamTypes, false)
+	llvm.AddFunction(converter.module, "print_int", printIntFuncType)
+
+	printStringParamTypes := []llvm.Type{llvm.PointerType(context.Int8Type(), 0)}
+	printStringFuncType := llvm.FunctionType(context.VoidType(), printStringParamTypes, false)
+	llvm.AddFunction(converter.module, "print_string", printStringFuncType)
 
 	return nil
 }
