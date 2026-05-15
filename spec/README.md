@@ -6,18 +6,17 @@ High developer productivity, stable, powerful, and syntactically elegant languag
 
 ## Goals
 
-1. Run on the BEAM VM and ship as OTP releases or escripts (portability, reliability over single static binaries)
-2. Strongly-typed language with the flexibility to create anonymous objects
-3. Support for structured types in anonymous objects
-4. Extremely simple syntax
-5. Highly powerful type inference system
-6. Compiler written in its own language
-7. Massively concurrent and fault‑tolerant by design using lightweight BEAM processes and message passing
-8. Object‑oriented by default (classes and nominal interfaces), while supporting functional pipelines (|>) as first‑class
-9. Low learning curve
-10. High productivity and modeling capacity with predictable performance and memory via BEAM GC
-11. First‑class interoperability with Erlang/Elixir/Gleam and the broader OTP ecosystem
-12. Excellent observability and tooling (observer, tracing, profiling) on BEAM
+1. Compile to native binaries through LLVM
+2. Provide strong static typing with ergonomic inference
+3. Support anonymous records / structural object types
+4. Keep syntax simple and low-friction
+5. Support self-hosting compiler development
+6. Provide object-oriented programming by default with functional composition tools
+7. Support Result-based error handling, optional types, and pattern matching
+8. Offer predictable performance with a small native runtime
+9. Provide lightweight task-based concurrency as a runtime feature
+10. Interoperate with C ABI and native system libraries
+11. Ship with formatter, test runner, package manager, and diagnostics-first tooling
 
 ## Types
 

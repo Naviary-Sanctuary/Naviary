@@ -1,13 +1,13 @@
-# Naviary MVP Roadm
+# Naviary Language Roadmap
 
 ## Implementation Design
 
 ### Core Decisions
 
 - **Source Code Extension**: `.navi`
-- **Compiler Language**: Go
+- **Compiler Language**: swift
 - **Target**: LLVM IR → Native binary
-- **Runtime**: Zig runtime library (linked via LLVM)
+- **Runtime**: TBD
 - **Memory Management**: Stack map-based GC
   - Phase 1: Mark & Sweep
   - Phase 2: Generational
