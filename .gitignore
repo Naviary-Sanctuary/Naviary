@@ -6,7 +6,7 @@ runtime/*.o
 runtime/.zig-cache
 
 # output files
-build/*
+build
 
 # etc
 **/.DS_Store
