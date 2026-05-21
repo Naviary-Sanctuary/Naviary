@@ -1,4 +1,5 @@
 # compiler
+compiler/target
 examples/*.ll
 
 # runtime
