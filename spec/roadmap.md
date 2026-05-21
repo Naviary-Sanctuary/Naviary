@@ -5,7 +5,7 @@
 ### Core Decisions
 
 - **Source Code Extension**: `.navi`
-- **Compiler Language**: swift
+- **Compiler Language**: rust
 - **Target**: LLVM IR → Native binary
 - **Runtime**: TBD
 - **Memory Management**: Stack map-based GC
