@@ -24,7 +24,7 @@
 
 ```navi
 func main() {
-  let a = 1 + 2
+  const a = 1 + 2
   print(a)
 }
 ```
@@ -32,7 +32,7 @@ func main() {
 #### Features
 
 - Basic lexer (numbers, identifiers, operators)
-- Simple parser (functions, let, expressions)
+- Simple parser (functions, variable declarations, expressions)
 - AST generation
 - Basic NIR lowering from AST
 - LLVM IR code generation
@@ -51,7 +51,7 @@ class Person(name: string, age: int) {
 }
 
 func main() {
-    let p = Person("Alice", 30)
+    const p = Person("Alice", 30)
     p.greet()
 }
 ```
@@ -141,7 +141,7 @@ class Button: Drawable {
 #### Goal
 
 ```navi
-let result = match value {
+const result = match value {
     0 => "zero",
     1..10 => "small",
     _ => "large"
@@ -160,7 +160,7 @@ let result = match value {
 
 ```navi
 class List<T> {
-    mut items: T[]
+    let items: T[]
     func add(item: T) { this.items.append(item) }
 }
 ```
@@ -187,19 +187,19 @@ class List<T> {
 
 ### Phase 1: Mark & Sweep (0.0.2)
 
-#### Zig Runtime Structure
+#### Runtime Structure
 
-```zig
-const GCHeader = struct {
-    next: ?*GCHeader,
-    type_id: u32,
-    size: usize,
-    marked: bool,
-};
+```text
+struct GarbageCollectorHeader {
+    next: GarbageCollectorHeader?
+    typeIdentifier: unsigned integer
+    size: unsigned integer
+    marked: boolean
+}
 
-pub fn collect() void {
-    mark();  // Mark reachable objects
-    sweep(); // Free unmarked objects
+function collect() {
+    mark()  // Mark reachable objects
+    sweep() // Free unmarked objects
 }
 ```
 
@@ -216,12 +216,12 @@ pub fn collect() void {
 
 #### Structure
 
-```zig
-const GenerationalGC = struct {
-    nursery: Region,     // Young generation
-    mature: Region,      // Old generation
-    remembered_set: Set, // Old→Young references
-};
+```text
+struct GenerationalGarbageCollector {
+    nursery: Region       // Young generation
+    mature: Region        // Old generation
+    rememberedSet: Set    // Old-to-young references
+}
 ```
 
 #### Write Barrier
@@ -263,7 +263,7 @@ naviary compile app.navi
 #   app.ll           - Main program IR
 #   app_gc_meta.ll   - Stack maps & type info
 
-# Build with Zig runtime and LLVM
+# Build with runtime and LLVM
 clang app.ll app_gc_meta.ll -lnaviary_runtime -o app
 
 # Run

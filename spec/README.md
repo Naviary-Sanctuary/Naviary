@@ -152,25 +152,21 @@ let value = nothing ?? 0 // nothing is nil, so value is 0
 ### Variables
 
 ```
-// Immutable variables (constants)
-let pi = 3.14159
-let name = "Alice"
-
-// Mutable variables
-let mut counter = 0
+// Short mutable local declaration with type inference
+counter := 0
 counter += 1
 
-// Mutable alias
-let counter := 0
-counter += 1
+// Mutable declaration
+let score: float = 0.0
 
-// Compile-time constants
-const MAX_SIZE = 1000
-const VERSION = "1.0.0"
+// Immutable constants
+const pi = 3.14159
+const name = "Alice"
+const maxSize = 1000
+const version = "1.0.0"
 
 // Type annotation
 let age: int = 30
-let mut score: float = 0.0
 ```
 
 ### Default
@@ -178,14 +174,9 @@ let mut score: float = 0.0
 naviary has no default value assignment if there is no optional operator.
 
 ```naviary
-let x:string? // x == nil
-let x:string; // Compile Error
-let mut x:string; // Compile error if you don't allocate it later.naviary has no default value assignment.
-```
-
-```naviary
-let x:string; // Compile Error
-let mut x:string; // Compile error if you don't allocate it later.
+let x: string? // x == nil
+let x: string // Compile Error: non-optional variables require an initializer.
+const x: string // Compile Error: constants require an initializer.
 ```
 
 ### Decorator
@@ -848,7 +839,7 @@ func example() {
 // defer if
 func transaction() {
     let tx = db.begin()
-    let mut success = false
+    let success = false
 
     defer if !success {
         tx.rollback()
