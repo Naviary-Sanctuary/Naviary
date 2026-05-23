@@ -14,6 +14,7 @@ pub enum TokenKind {
     RightBrace,
 
     Plus,
+    Minus,
     Equal,
 
     Semicolon,
